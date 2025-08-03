@@ -8,8 +8,8 @@ echo
 
 # Step 1: Test normal operation
 echo "=== STEP 1: Normal wtd operation ==="
-echo "Running: wtd blooop/test_renv date"
-wtd blooop/test_renv date
+echo "Running: wtd blooop/test_wtd date"
+wtd blooop/test_wtd date
 echo "SUCCESS: Initial wtd operation completed"
 echo
 
@@ -22,15 +22,15 @@ echo
 
 # Step 3: Test wtd recreation and operation
 echo "=== STEP 3: Testing wtd recreation ==="
-echo "Running: wtd blooop/test_renv date (should recreate everything)"
-wtd blooop/test_renv date
+echo "Running: wtd blooop/test_wtd date (should recreate everything)"
+wtd blooop/test_wtd date
 echo "SUCCESS: wtd recreated and operated correctly"
 echo
 
 # Step 4: Test that subsequent operations work normally
 echo "=== STEP 4: Testing subsequent operations ==="
-echo "Running: wtd blooop/test_renv git status"
-wtd blooop/test_renv git status
+echo "Running: wtd blooop/test_wtd git status"
+wtd blooop/test_wtd git status
 echo "SUCCESS: Subsequent operations work correctly"
 echo
 

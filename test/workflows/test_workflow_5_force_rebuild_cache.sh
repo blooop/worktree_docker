@@ -13,7 +13,7 @@ echo
 echo "=== INITIAL BUILD ==="
 echo "Creating initial container for cache testing"
 start_time=$(date +%s)
-wtd blooop/test_renv date
+wtd blooop/test_wtd date
 end_time=$(date +%s)
 initial_time=$((end_time - start_time))
 echo "TIMING: Initial build took ${initial_time} seconds"
@@ -21,9 +21,9 @@ echo
 
 # Force rebuild - removes and recreates container
 echo "=== FORCE REBUILD TEST ==="
-echo "Running: wtd --rebuild blooop/test_renv date to force a rebuild"
+echo "Running: wtd --rebuild blooop/test_wtd date to force a rebuild"
 start_time=$(date +%s)
-wtd --rebuild blooop/test_renv date
+wtd --rebuild blooop/test_wtd date
 end_time=$(date +%s)
 force_time=$((end_time - start_time))
 echo "TIMING: Force rebuild took ${force_time} seconds"
@@ -31,9 +31,9 @@ echo
 
 # Normal run - should reuse existing container (fastest)
 echo "=== CONTAINER REUSE TEST ==="
-echo "Running: wtd blooop/test_renv date should finish fast (reusing existing container)"
+echo "Running: wtd blooop/test_wtd date should finish fast (reusing existing container)"
 start_time=$(date +%s)
-wtd blooop/test_renv date
+wtd blooop/test_wtd date
 end_time=$(date +%s)
 reuse_time=$((end_time - start_time))
 echo "TIMING: Container reuse took ${reuse_time} seconds"
@@ -41,9 +41,9 @@ echo
 
 # No-cache rebuild - ignores Docker layer cache (if implemented)
 echo "=== NO-CACHE REBUILD TEST ==="
-echo "Running: wtd --nocache blooop/test_renv date"
+echo "Running: wtd --nocache blooop/test_wtd date"
 start_time=$(date +%s)
-wtd --nocache blooop/test_renv date
+wtd --nocache blooop/test_wtd date
 end_time=$(date +%s)
 nocache_time=$((end_time - start_time))
 echo "TIMING: No-cache rebuild took ${nocache_time} seconds"

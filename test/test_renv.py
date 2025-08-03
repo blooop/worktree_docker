@@ -43,7 +43,7 @@ class TestRepoSpec:
 
     def test_parse_simple(self):
         """Test simple repo specification parsing."""
-        spec = RepoSpec.parse("blooop/test_renv")
+        spec = RepoSpec.parse("blooop/test_wtd")
         assert spec.owner == "blooop"
         assert spec.repo == "test_wtd"
         assert spec.branch == "main"
@@ -51,7 +51,7 @@ class TestRepoSpec:
 
     def test_parse_with_branch(self):
         """Test repo specification with branch."""
-        spec = RepoSpec.parse("blooop/test_renv@feature/new")
+        spec = RepoSpec.parse("blooop/test_wtd@feature/new")
         assert spec.owner == "blooop"
         assert spec.repo == "test_wtd"
         assert spec.branch == "feature/new"
@@ -59,7 +59,7 @@ class TestRepoSpec:
 
     def test_parse_with_subfolder(self):
         """Test repo specification with subfolder."""
-        spec = RepoSpec.parse("blooop/test_renv#src/core")
+        spec = RepoSpec.parse("blooop/test_wtd#src/core")
         assert spec.owner == "blooop"
         assert spec.repo == "test_wtd"
         assert spec.branch == "main"
@@ -67,7 +67,7 @@ class TestRepoSpec:
 
     def test_parse_with_branch_and_subfolder(self):
         """Test repo specification with both branch and subfolder."""
-        spec = RepoSpec.parse("blooop/test_renv@feature/new#src/core")
+        spec = RepoSpec.parse("blooop/test_wtd@feature/new#src/core")
         assert spec.owner == "blooop"
         assert spec.repo == "test_wtd"
         assert spec.branch == "feature/new"
@@ -76,7 +76,7 @@ class TestRepoSpec:
     def test_str_representation(self):
         """Test string representation."""
         spec = RepoSpec("blooop", "test_wtd", "feature/new", "src")
-        assert str(spec) == "blooop/test_renv@feature/new#src"
+        assert str(spec) == "blooop/test_wtd@feature/new#src"
 
     def test_compose_project_name(self):
         """Test Docker Compose project name generation."""
@@ -500,7 +500,9 @@ class TestComposeOperations:
     @patch("subprocess.run")
     @patch("os.getuid", return_value=1000)
     @patch("os.getgid", return_value=1000)
-    def test_run_compose_service_interactive(self, mock_getgid, mock_getuid, mock_run):  # pylint: disable=unused-argument
+    def test_run_compose_service_interactive(
+        self, mock_getgid, mock_getuid, mock_run
+    ):  # pylint: disable=unused-argument
         """Test running compose service interactively."""
         mock_run.return_value = Mock(returncode=0)
 
@@ -558,7 +560,9 @@ class TestComposeOperations:
     @patch("subprocess.run")
     @patch("os.getuid", return_value=1000)
     @patch("os.getgid", return_value=1000)
-    def test_run_compose_service_with_command(self, mock_getgid, mock_getuid, mock_run):  # pylint: disable=unused-argument
+    def test_run_compose_service_with_command(
+        self, mock_getgid, mock_getuid, mock_run
+    ):  # pylint: disable=unused-argument
         """Test running compose service with command."""
         mock_run.return_value = Mock(returncode=0)
 
@@ -707,7 +711,7 @@ class TestCommands:
 class TestMainFunction:
     """Test main entry point."""
 
-    @patch("sys.argv", ["wtd", "blooop/test_renv@main"])
+    @patch("sys.argv", ["wtd", "blooop/test_wtd@main"])
     @patch("rockerc.wtd.cmd_launch")
     def test_main_launch_command(self, mock_cmd_launch):
         """Test main function with launch command."""
@@ -740,7 +744,9 @@ class TestIntegration:
     @patch("subprocess.run")
     @patch("os.getuid", return_value=1000)
     @patch("os.getgid", return_value=1000)
-    def test_launch_environment_full_workflow(self, mock_getgid, mock_getuid, mock_run):  # pylint: disable=unused-argument
+    def test_launch_environment_full_workflow(
+        self, mock_getgid, mock_getuid, mock_run
+    ):  # pylint: disable=unused-argument
         """Test complete launch environment workflow."""
         # Mock all subprocess calls to succeed
         mock_run.return_value = Mock(returncode=0)
