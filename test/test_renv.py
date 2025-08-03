@@ -1,15 +1,15 @@
 """
-Comprehensive test suite for the new renv implementation with Docker Compose + Buildx/Bake
+Comprehensive test suite for the new wtd implementation with Docker Compose + Buildx/Bake
 """
 
 import pytest
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
-from rockerc.renv import (
+from rockerc.wtd import (
     RepoSpec,
     Extension,
-    RenvConfig,
+    wtdConfig,
     ExtensionManager,
     ComposeConfig,
     LaunchConfig,
@@ -43,45 +43,45 @@ class TestRepoSpec:
 
     def test_parse_simple(self):
         """Test simple repo specification parsing."""
-        spec = RepoSpec.parse("blooop/test_renv")
+        spec = RepoSpec.parse("blooop/test_wtd")
         assert spec.owner == "blooop"
-        assert spec.repo == "test_renv"
+        assert spec.repo == "test_wtd"
         assert spec.branch == "main"
         assert spec.subfolder is None
 
     def test_parse_with_branch(self):
         """Test repo specification with branch."""
-        spec = RepoSpec.parse("blooop/test_renv@feature/new")
+        spec = RepoSpec.parse("blooop/test_wtd@feature/new")
         assert spec.owner == "blooop"
-        assert spec.repo == "test_renv"
+        assert spec.repo == "test_wtd"
         assert spec.branch == "feature/new"
         assert spec.subfolder is None
 
     def test_parse_with_subfolder(self):
         """Test repo specification with subfolder."""
-        spec = RepoSpec.parse("blooop/test_renv#src/core")
+        spec = RepoSpec.parse("blooop/test_wtd#src/core")
         assert spec.owner == "blooop"
-        assert spec.repo == "test_renv"
+        assert spec.repo == "test_wtd"
         assert spec.branch == "main"
         assert spec.subfolder == "src/core"
 
     def test_parse_with_branch_and_subfolder(self):
         """Test repo specification with both branch and subfolder."""
-        spec = RepoSpec.parse("blooop/test_renv@feature/new#src/core")
+        spec = RepoSpec.parse("blooop/test_wtd@feature/new#src/core")
         assert spec.owner == "blooop"
-        assert spec.repo == "test_renv"
+        assert spec.repo == "test_wtd"
         assert spec.branch == "feature/new"
         assert spec.subfolder == "src/core"
 
     def test_str_representation(self):
         """Test string representation."""
-        spec = RepoSpec("blooop", "test_renv", "feature/new", "src")
-        assert str(spec) == "blooop/test_renv@feature/new#src"
+        spec = RepoSpec("blooop", "test_wtd", "feature/new", "src")
+        assert str(spec) == "blooop/test_wtd@feature/new#src"
 
     def test_compose_project_name(self):
         """Test Docker Compose project name generation."""
-        spec = RepoSpec("blooop", "test_renv", "feature/new")
-        assert spec.compose_project_name == "test_renv-feature-new"
+        spec = RepoSpec("blooop", "test_wtd", "feature/new")
+        assert spec.compose_project_name == "test_wtd-feature-new"
 
 
 class TestExtension:
@@ -110,13 +110,13 @@ class TestExtension:
         assert ext1.hash != ext2.hash
 
 
-class TestRenvConfig:
-    """Test RenvConfig functionality."""
+class TestwtdConfig:
+    """Test wtdConfig functionality."""
 
     def test_load_yaml_config(self):
         """Test loading YAML configuration."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".renv.yml"
+            config_path = Path(tmpdir) / ".wtd.yml"
             config_data = {
                 "extensions": ["git", "x11"],
                 "base_image": "ubuntu:20.04",
@@ -128,7 +128,7 @@ class TestRenvConfig:
 
                 yaml.dump(config_data, f)
 
-            config = RenvConfig(Path(tmpdir))
+            config = wtdConfig(Path(tmpdir))
             assert config.extensions == ["git", "x11"]
             assert config.base_image == "ubuntu:20.04"
             assert config.platforms == ["linux/amd64", "linux/arm64"]
@@ -136,7 +136,7 @@ class TestRenvConfig:
     def test_load_json_config(self):
         """Test loading JSON configuration."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".renv.json"
+            config_path = Path(tmpdir) / ".wtd.json"
             config_data = {"extensions": ["fzf", "uv"], "base_image": "debian:bullseye"}
 
             with open(config_path, "w", encoding="utf-8") as f:
@@ -144,14 +144,14 @@ class TestRenvConfig:
 
                 json.dump(config_data, f)
 
-            config = RenvConfig(Path(tmpdir))
+            config = wtdConfig(Path(tmpdir))
             assert config.extensions == ["fzf", "uv"]
             assert config.base_image == "debian:bullseye"
 
     def test_default_config(self):
         """Test default configuration when no file exists."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config = RenvConfig(Path(tmpdir))
+            config = wtdConfig(Path(tmpdir))
             assert config.extensions == []
             assert config.base_image == "ubuntu:22.04"
             assert config.platforms == ["linux/amd64"]
@@ -178,7 +178,7 @@ class TestExtensionManager:
         """Test loading repo-local extensions."""
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_dir = Path(tmpdir) / "repo"
-            ext_dir = repo_dir / ".renv" / "exts" / "custom"
+            ext_dir = repo_dir / ".wtd" / "exts" / "custom"
             ext_dir.mkdir(parents=True)
 
             # Create extension files
@@ -211,7 +211,7 @@ class TestExtensionManager:
 class TestPathHelpers:
     """Test path helper functions."""
 
-    @patch.dict("os.environ", {"RENV_CACHE_DIR": "/custom/cache"})
+    @patch.dict("os.environ", {"wtd_CACHE_DIR": "/custom/cache"})
     def test_get_cache_dir_custom(self):
         """Test custom cache directory from environment."""
         assert get_cache_dir() == Path("/custom/cache")
@@ -219,23 +219,23 @@ class TestPathHelpers:
     @patch.dict("os.environ", {}, clear=True)
     def test_get_cache_dir_default(self):
         """Test default cache directory."""
-        assert get_cache_dir() == Path.home() / ".renv"
+        assert get_cache_dir() == Path.home() / ".wtd"
 
     def test_get_workspaces_dir(self):
         """Test workspaces directory."""
-        with patch("rockerc.renv.get_cache_dir", return_value=Path("/cache")):
+        with patch("rockerc.wtd.get_cache_dir", return_value=Path("/cache")):
             assert get_workspaces_dir() == Path("/cache/workspaces")
 
     def test_get_repo_dir(self):
         """Test repository directory path."""
         spec = RepoSpec("owner", "repo", "main")
-        with patch("rockerc.renv.get_workspaces_dir", return_value=Path("/workspaces")):
+        with patch("rockerc.wtd.get_workspaces_dir", return_value=Path("/workspaces")):
             assert get_repo_dir(spec) == Path("/workspaces/owner/repo")
 
     def test_get_worktree_dir(self):
         """Test worktree directory path."""
         spec = RepoSpec("owner", "repo", "feature/new")
-        with patch("rockerc.renv.get_repo_dir", return_value=Path("/repo")):
+        with patch("rockerc.wtd.get_repo_dir", return_value=Path("/repo")):
             assert get_worktree_dir(spec) == Path("/repo/worktree-feature-new")
 
 
@@ -277,7 +277,7 @@ class TestGitOperations:
         assert "fetch" in call_args
         assert "--all" in call_args
 
-    @patch("rockerc.renv.setup_bare_repo")
+    @patch("rockerc.wtd.setup_bare_repo")
     @patch("subprocess.run")
     @patch("pathlib.Path.exists")
     def test_setup_worktree_create(self, mock_exists, mock_run, mock_setup_bare):
@@ -593,7 +593,7 @@ class TestComposeOperations:
             build_dir = Path(tmpdir) / "build-cache"
             build_dir.mkdir()
 
-            with patch("rockerc.renv.get_build_cache_dir", return_value=build_dir):
+            with patch("rockerc.wtd.get_build_cache_dir", return_value=build_dir):
                 spec = RepoSpec("owner", "repo", "main")
                 result = destroy_environment(spec)
 
@@ -608,7 +608,7 @@ class TestComposeOperations:
 class TestCommands:
     """Test CLI command functions."""
 
-    @patch("rockerc.renv.launch_environment")
+    @patch("rockerc.wtd.launch_environment")
     def test_cmd_launch(self, mock_launch):
         """Test launch command."""
         mock_launch.return_value = 0
@@ -634,7 +634,7 @@ class TestCommands:
         assert call_args.platforms == ["linux/amd64", "linux/arm64"]
         assert call_args.builder_name == "custom_builder"
 
-    @patch("rockerc.renv.list_active_containers")
+    @patch("rockerc.wtd.list_active_containers")
     def test_cmd_list_empty(self, mock_list_containers):
         """Test list command with no containers."""
         mock_list_containers.return_value = []
@@ -643,7 +643,7 @@ class TestCommands:
         result = cmd_list(args)
         assert result == 0
 
-    @patch("rockerc.renv.list_active_containers")
+    @patch("rockerc.wtd.list_active_containers")
     def test_cmd_list_with_containers(self, mock_list_containers):
         """Test list command with containers."""
         mock_list_containers.return_value = [
@@ -654,8 +654,8 @@ class TestCommands:
         result = cmd_list(args)
         assert result == 0
 
-    @patch("rockerc.renv.prune_all")
-    @patch("rockerc.renv.prune_repo_environment")
+    @patch("rockerc.wtd.prune_all")
+    @patch("rockerc.wtd.prune_repo_environment")
     def test_cmd_prune(self, mock_prune_repo, mock_prune_all):
         """Test prune command."""
         mock_prune_all.return_value = 0
@@ -675,7 +675,7 @@ class TestCommands:
         assert result == 0
         mock_prune_repo.assert_called_once()
 
-    @patch("rockerc.renv.ExtensionManager")
+    @patch("rockerc.wtd.ExtensionManager")
     def test_cmd_ext_list(self, mock_ext_manager):
         """Test extension list command."""
         mock_manager = Mock()
@@ -711,8 +711,8 @@ class TestCommands:
 class TestMainFunction:
     """Test main entry point."""
 
-    @patch("sys.argv", ["renv", "blooop/test_renv@main"])
-    @patch("rockerc.renv.cmd_launch")
+    @patch("sys.argv", ["wtd", "blooop/test_wtd@main"])
+    @patch("rockerc.wtd.cmd_launch")
     def test_main_launch_command(self, mock_cmd_launch):
         """Test main function with launch command."""
         mock_cmd_launch.return_value = 0
@@ -721,8 +721,8 @@ class TestMainFunction:
         assert result == 0
         mock_cmd_launch.assert_called_once()
 
-    @patch("sys.argv", ["renv", "--list"])
-    @patch("rockerc.renv.cmd_list")
+    @patch("sys.argv", ["wtd", "--list"])
+    @patch("rockerc.wtd.cmd_list")
     def test_main_list_command(self, mock_cmd_list):
         """Test main function with list command."""
         mock_cmd_list.return_value = 0
@@ -731,7 +731,7 @@ class TestMainFunction:
         assert result == 0
         mock_cmd_list.assert_called_once()
 
-    @patch("sys.argv", ["renv", "--help"])
+    @patch("sys.argv", ["wtd", "--help"])
     def test_main_help(self):
         """Test main function with help."""
         with pytest.raises(SystemExit):
@@ -762,12 +762,12 @@ class TestIntegration:
             repo_dir.mkdir()
 
             # Create mock config
-            config_file = worktree_dir / ".renv.yml"
+            config_file = worktree_dir / ".wtd.yml"
             config_file.write_text("extensions: [git, x11]", encoding="utf-8")
 
-            with patch("rockerc.renv.get_cache_dir", return_value=cache_dir):
-                with patch("rockerc.renv.get_worktree_dir", return_value=worktree_dir):
-                    with patch("rockerc.renv.get_repo_dir", return_value=repo_dir):
+            with patch("rockerc.wtd.get_cache_dir", return_value=cache_dir):
+                with patch("rockerc.wtd.get_worktree_dir", return_value=worktree_dir):
+                    with patch("rockerc.wtd.get_repo_dir", return_value=repo_dir):
                         spec = RepoSpec("owner", "repo", "main")
                         config = LaunchConfig(repo_spec=spec, extensions=["base"], rebuild=True)
                         result = launch_environment(config)

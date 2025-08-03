@@ -2,37 +2,37 @@
 set -e
 cd /tmp
 
-echo "=== TESTING RENV RECREATION AFTER DELETION ==="
-echo "This test verifies that renv works correctly after deleting the .renv folder"
+echo "=== TESTING wtd RECREATION AFTER DELETION ==="
+echo "This test verifies that wtd works correctly after deleting the .wtd folder"
 echo
 
 # Step 1: Test normal operation
-echo "=== STEP 1: Normal renv operation ==="
-echo "Running: renv blooop/test_renv date"
-renv blooop/test_renv date
-echo "SUCCESS: Initial renv operation completed"
+echo "=== STEP 1: Normal wtd operation ==="
+echo "Running: wtd blooop/test_renv date"
+wtd blooop/test_renv date
+echo "SUCCESS: Initial wtd operation completed"
 echo
 
-# Step 2: Delete .renv folder completely
-echo "=== STEP 2: Deleting .renv folder ==="
-echo "Removing ~/.renv folder completely..."
-rm -rf ~/.renv
-echo "SUCCESS: .renv folder deleted"
+# Step 2: Delete .wtd folder completely
+echo "=== STEP 2: Deleting .wtd folder ==="
+echo "Removing ~/.wtd folder completely..."
+rm -rf ~/.wtd
+echo "SUCCESS: .wtd folder deleted"
 echo
 
-# Step 3: Test renv recreation and operation
-echo "=== STEP 3: Testing renv recreation ==="
-echo "Running: renv blooop/test_renv date (should recreate everything)"
-renv blooop/test_renv date
-echo "SUCCESS: renv recreated and operated correctly"
+# Step 3: Test wtd recreation and operation
+echo "=== STEP 3: Testing wtd recreation ==="
+echo "Running: wtd blooop/test_renv date (should recreate everything)"
+wtd blooop/test_renv date
+echo "SUCCESS: wtd recreated and operated correctly"
 echo
 
 # Step 4: Test that subsequent operations work normally
 echo "=== STEP 4: Testing subsequent operations ==="
-echo "Running: renv blooop/test_renv git status"
-renv blooop/test_renv git status
+echo "Running: wtd blooop/test_renv git status"
+wtd blooop/test_renv git status
 echo "SUCCESS: Subsequent operations work correctly"
 echo
 
 echo "=== ALL TESTS PASSED ==="
-echo "renv successfully handles .renv folder deletion and recreation"
+echo "wtd successfully handles .wtd folder deletion and recreation"

@@ -1,5 +1,5 @@
 """
-renv - Development environment launcher using Docker, Git worktrees, and Buildx/Bake
+wtd - Development environment launcher using Docker, Git worktrees, and Buildx/Bake
 
 A tool that combines git worktrees with Docker Compose and Buildx to provide
 isolated development environments for each repository branch.
@@ -61,7 +61,7 @@ class RepoSpec:
 
 @dataclass
 class Extension:
-    """Represents a renv extension with its configuration."""
+    """Represents a wtd extension with its configuration."""
 
     name: str
     dockerfile_content: str
@@ -77,8 +77,8 @@ class Extension:
         return hashlib.sha256(content.encode()).hexdigest()[:12]
 
 
-class RenvConfig:
-    """Manages renv configuration from .renv.yml/.renv.json files."""
+class wtdConfig:
+    """Manages wtd configuration from .wtd.yml/.wtd.json files."""
 
     def __init__(self, repo_path: Path):
         self.repo_path = repo_path
@@ -86,7 +86,7 @@ class RenvConfig:
 
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from repo directory."""
-        for config_file in [".renv.yml", ".renv.yaml", ".renv.json"]:
+        for config_file in [".wtd.yml", ".wtd.yaml", ".wtd.json"]:
             config_path = self.repo_path / config_file
             if config_path.exists():
                 try:
@@ -148,7 +148,7 @@ RUN apt-get update && apt-get install -y \\
 RUN git config --global --add safe.directory '*'
 """,
             compose_fragment={
-                "volumes": ["~/.gitconfig:/home/renv/.gitconfig:ro", "~/.ssh:/home/renv/.ssh:ro"]
+                "volumes": ["~/.gitconfig:/home/wtd/.gitconfig:ro", "~/.ssh:/home/wtd/.ssh:ro"]
             },
         )
 
@@ -158,15 +158,15 @@ RUN git config --global --add safe.directory '*'
             dockerfile_content="""
 ARG USER_ID=1000
 ARG GROUP_ID=1000
-RUN groupadd -g ${GROUP_ID} renv && \\
-    useradd -u ${USER_ID} -g renv -m -s /bin/bash renv && \\
-    echo 'renv ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
-USER renv
+RUN groupadd -g ${GROUP_ID} wtd && \\
+    useradd -u ${USER_ID} -g wtd -m -s /bin/bash wtd && \\
+    echo 'wtd ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+USER wtd
 WORKDIR /workspace
 """,
             compose_fragment={
                 "build": {"args": {"USER_ID": "${USER_ID:-1000}", "GROUP_ID": "${GROUP_ID:-1000}"}},
-                "environment": {"USER": "renv", "HOME": "/home/renv"},
+                "environment": {"USER": "wtd", "HOME": "/home/wtd"},
             },
         )
 
@@ -205,7 +205,7 @@ RUN apt-get update && apt-get install -y \\
             name="uv",
             dockerfile_content="""
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/home/renv/.cargo/bin:$PATH"
+ENV PATH="/home/wtd/.cargo/bin:$PATH"
 """,
             compose_fragment={},
         )
@@ -215,7 +215,7 @@ ENV PATH="/home/renv/.cargo/bin:$PATH"
             name="pixi",
             dockerfile_content="""
 RUN curl -fsSL https://pixi.sh/install.sh | bash
-ENV PATH="/home/renv/.pixi/bin:$PATH"
+ENV PATH="/home/wtd/.pixi/bin:$PATH"
 """,
             compose_fragment={},
         )
@@ -224,9 +224,9 @@ ENV PATH="/home/renv/.pixi/bin:$PATH"
         extensions["fzf"] = Extension(
             name="fzf",
             dockerfile_content="""
-RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/renv/.fzf && \\
-    chown -R renv:renv /home/renv/.fzf && \\
-    /home/renv/.fzf/install --all
+RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/wtd/.fzf && \\
+    chown -R wtd:wtd /home/wtd/.fzf && \\
+    /home/wtd/.fzf/install --all
 """,
             compose_fragment={},
         )
@@ -237,7 +237,7 @@ RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/renv/.fzf && \
         """Get extension by name, checking repo-local first, then built-in."""
         # Check repo-local extensions first
         if repo_path:
-            local_ext_dir = repo_path / ".renv" / "exts" / name
+            local_ext_dir = repo_path / ".wtd" / "exts" / name
             if local_ext_dir.exists():
                 return self._load_local_extension(name, local_ext_dir)
 
@@ -276,7 +276,7 @@ RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/renv/.fzf && \
         extensions = set(self._builtin_extensions.keys())
 
         if repo_path:
-            local_exts_dir = repo_path / ".renv" / "exts"
+            local_exts_dir = repo_path / ".wtd" / "exts"
             if local_exts_dir.exists():
                 extensions.update(d.name for d in local_exts_dir.iterdir() if d.is_dir())
 
@@ -284,11 +284,11 @@ RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/renv/.fzf && \
 
 
 def get_cache_dir() -> Path:
-    """Get renv cache directory."""
-    cache_dir = os.getenv("RENV_CACHE_DIR")
+    """Get wtd cache directory."""
+    cache_dir = os.getenv("wtd_CACHE_DIR")
     if cache_dir:
         return Path(cache_dir)
-    return Path.home() / ".renv"
+    return Path.home() / ".wtd"
 
 
 def get_workspaces_dir() -> Path:
@@ -379,7 +379,7 @@ def setup_worktree(repo_spec: RepoSpec) -> Path:
     return worktree_dir
 
 
-def ensure_buildx_builder(builder_name: str = "renv_builder") -> bool:
+def ensure_buildx_builder(builder_name: str = "wtd_builder") -> bool:
     """Ensure Buildx builder exists and is active."""
     try:
         # Check if builder exists
@@ -553,7 +553,7 @@ def generate_bake_file(
 target "{target_name}" {{
     context = "."
     dockerfile = "Dockerfile.{ext.name}"
-    tags = ["renv/{ext.name}:{ext.hash}"]
+    tags = ["wtd/{ext.name}:{ext.hash}"]
     platforms = {platforms_hcl}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
@@ -568,14 +568,14 @@ target "{target_name}" {{
         dockerfile_path = build_dir / f"Dockerfile.{ext.name}"
         dockerfile_path.write_text(ext_dockerfile, encoding="utf-8")
 
-        current_image = f"renv/{ext.name}:{ext.hash}"
+        current_image = f"wtd/{ext.name}:{ext.hash}"
 
     # Final target combining all extensions
     final_target = f"""
 target "final" {{
     context = "."
     dockerfile = "Dockerfile"
-    tags = ["renv/final:{'-'.join(ext.hash for ext in extensions)}"]
+    tags = ["wtd/final:{"-".join(ext.hash for ext in extensions)}"]
     platforms = {platforms_hcl}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
@@ -592,7 +592,8 @@ target "final" {{
 
 
 def should_rebuild_image(
-    image_name: str, extensions: List[Extension]  # pylint: disable=unused-argument
+    image_name: str,
+    extensions: List[Extension],  # pylint: disable=unused-argument
 ) -> bool:
     """Check if image needs rebuilding based on extension hashes."""
     try:
@@ -613,7 +614,7 @@ def should_rebuild_image(
 
 
 def build_image_with_bake(
-    build_dir: Path, builder_name: str = "renv_builder", load: bool = True, nocache: bool = False
+    build_dir: Path, builder_name: str = "wtd_builder", load: bool = True, nocache: bool = False
 ) -> bool:
     """Build images using docker buildx bake."""
     try:
@@ -749,7 +750,7 @@ def run_compose_service(
 
 
 def list_active_containers() -> List[Dict[str, str]]:
-    """List active renv containers."""
+    """List active wtd containers."""
     try:
         result = subprocess.run(
             [
@@ -807,7 +808,7 @@ class LaunchConfig:
     no_gui: bool = False
     no_gpu: bool = False
     platforms: Optional[List[str]] = None
-    builder_name: str = "renv_builder"
+    builder_name: str = "wtd_builder"
 
 
 def launch_environment(config: LaunchConfig) -> int:
@@ -819,7 +820,7 @@ def launch_environment(config: LaunchConfig) -> int:
     repo_dir = get_repo_dir(config.repo_spec)
 
     # Load repo configuration
-    repo_config = RenvConfig(worktree_dir)
+    repo_config = wtdConfig(worktree_dir)
 
     # Merge extensions
     all_extensions = list(config.extensions) + repo_config.extensions
@@ -852,7 +853,7 @@ def launch_environment(config: LaunchConfig) -> int:
         "".join(ext.hash for ext in loaded_extensions).encode()
     ).hexdigest()[:12]
 
-    image_name = f"renv/{config.repo_spec.repo}:{combined_hash}"
+    image_name = f"wtd/{config.repo_spec.repo}:{combined_hash}"
     base_image = repo_config.base_image
 
     # Check if rebuild needed
@@ -929,8 +930,8 @@ def cmd_install(args) -> int:  # pylint: disable=unused-argument
     import os  # pylint: disable=reimported,redefined-outer-name
 
     # Bash completion script
-    bash_completion = """# renv bash completion
-_renv_complete() {
+    bash_completion = """# wtd bash completion
+_wtd_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
     
@@ -941,20 +942,20 @@ _renv_complete() {
     fi
     
     # Complete repo specs from existing workspaces
-    if [[ -d ~/.renv/workspaces ]]; then
-        local repos=$(find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+    if [[ -d ~/.wtd/workspaces ]]; then
+        local repos=$(find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | \\
                      sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u)
-        local branches=$(find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+        local branches=$(find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | \\
                         sed 's|.*worktree-||' | sort -u)
         COMPREPLY=($(compgen -W "${repos} ${branches}" -- ${cur}))
     fi
 }
-complete -F _renv_complete renv
+complete -F _wtd_complete wtd
 """
 
     # Zsh completion script
-    zsh_completion = """#compdef renv
-_renv() {
+    zsh_completion = """#compdef wtd
+_wtd() {
     local context state line
     typeset -A opt_args
     
@@ -966,51 +967,51 @@ _renv() {
         commands)
             _alternative \\
                 'commands:commands:(launch list prune help)' \\
-                'repos:repositories:_renv_repos'
+                'repos:repositories:_wtd_repos'
             ;;
         args)
-            _renv_repos
+            _wtd_repos
             ;;
     esac
 }
 
-_renv_repos() {
-    if [[ -d ~/.renv/workspaces ]]; then
+_wtd_repos() {
+    if [[ -d ~/.wtd/workspaces ]]; then
         local repos branches
-        repos=($(find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+        repos=($(find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | \\
                 sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u))
-        branches=($(find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | \\
+        branches=($(find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | \\
                    sed 's|.*worktree-||' | sort -u))
         _describe 'repositories' repos
         _describe 'branches' branches  
     fi
 }
 
-_renv "$@"
+_wtd "$@"
 """
 
     # Fish completion script
-    fish_completion = """# renv fish completion
-complete -c renv -f
+    fish_completion = """# wtd fish completion
+complete -c wtd -f
 
 # Commands
-complete -c renv -n "not __fish_seen_subcommand_from launch list prune help" -a "launch" -d "Launch container for repo and branch"
-complete -c renv -n "not __fish_seen_subcommand_from launch list prune help" -a "list" -d "Show active worktrees and containers"  
-complete -c renv -n "not __fish_seen_subcommand_from launch list prune help" -a "prune" -d "Remove unused containers and images"
-complete -c renv -n "not __fish_seen_subcommand_from launch list prune help" -a "help" -d "Show help message"
+complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "launch" -d "Launch container for repo and branch"
+complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "list" -d "Show active worktrees and containers"  
+complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "prune" -d "Remove unused containers and images"
+complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "help" -d "Show help message"
 
 # Options
-complete -c renv -l install -d "Install shell auto-completion"
-complete -c renv -l rebuild -d "Force rebuild of container"
-complete -c renv -l nocache -d "Disable Buildx cache"
-complete -c renv -l no-gui -d "Disable X11/GUI support"
-complete -c renv -l no-gpu -d "Disable GPU passthrough"
-complete -c renv -l log-level -d "Set log level" -xa "debug info warn error"
+complete -c wtd -l install -d "Install shell auto-completion"
+complete -c wtd -l rebuild -d "Force rebuild of container"
+complete -c wtd -l nocache -d "Disable Buildx cache"
+complete -c wtd -l no-gui -d "Disable X11/GUI support"
+complete -c wtd -l no-gpu -d "Disable GPU passthrough"
+complete -c wtd -l log-level -d "Set log level" -xa "debug info warn error"
 
 # Dynamic repo completion
-if test -d ~/.renv/workspaces
-    for repo in (find ~/.renv/workspaces -name "worktree-*" -type d 2>/dev/null | sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u)
-        complete -c renv -a "$repo" -d "Repository"
+if test -d ~/.wtd/workspaces
+    for repo in (find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u)
+        complete -c wtd -a "$repo" -d "Repository"
     end
 end
 """
@@ -1025,7 +1026,7 @@ end
         # Install bash completion
         bash_completion_dir = f"{home}/.bash_completion.d"
         os.makedirs(bash_completion_dir, exist_ok=True)
-        completion_file = f"{bash_completion_dir}/renv"
+        completion_file = f"{bash_completion_dir}/wtd"
 
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(bash_completion)
@@ -1038,7 +1039,7 @@ end
         # Install zsh completion
         zsh_completion_dir = f"{home}/.zsh/completions"
         os.makedirs(zsh_completion_dir, exist_ok=True)
-        completion_file = f"{zsh_completion_dir}/_renv"
+        completion_file = f"{zsh_completion_dir}/_wtd"
 
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(zsh_completion)
@@ -1052,7 +1053,7 @@ end
         # Install fish completion
         fish_completion_dir = f"{home}/.config/fish/completions"
         os.makedirs(fish_completion_dir, exist_ok=True)
-        completion_file = f"{fish_completion_dir}/renv.fish"
+        completion_file = f"{fish_completion_dir}/wtd.fish"
 
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(fish_completion)
@@ -1076,7 +1077,7 @@ end
 
 
 def cmd_prune(args) -> int:
-    """Prune containers, images, volumes, and renv folders."""
+    """Prune containers, images, volumes, and wtd folders."""
     try:
         if hasattr(args, "repo_spec") and args.repo_spec:
             # Selective pruning for specific repo spec
@@ -1100,11 +1101,11 @@ def prune_repo_environment(repo_spec: RepoSpec) -> int:
         subprocess.run(["docker", "stop", container_name], check=False, capture_output=True)
         subprocess.run(["docker", "rm", container_name], check=False, capture_output=True)
 
-        # Remove associated images (renv images for this repo)
+        # Remove associated images (wtd images for this repo)
         removed_images = []
         try:
             result = subprocess.run(
-                ["docker", "images", "--filter", f"reference=renv/{repo_spec.repo}*", "-q"],
+                ["docker", "images", "--filter", f"reference=wtd/{repo_spec.repo}*", "-q"],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -1172,14 +1173,14 @@ def prune_repo_environment(repo_spec: RepoSpec) -> int:
 
 
 def prune_all() -> int:
-    """Prune all renv-related containers, images, and folders."""
+    """Prune all wtd-related containers, images, and folders."""
     try:
         removed_containers = []
         removed_images = []
 
-        # Get all renv-related containers and remove them
+        # Get all wtd-related containers and remove them
         try:
-            # Find containers with renv-related project names
+            # Find containers with wtd-related project names
             result = subprocess.run(
                 ["docker", "ps", "-aq", "--filter", "label=com.docker.compose.project"],
                 capture_output=True,
@@ -1189,7 +1190,7 @@ def prune_all() -> int:
             if result.stdout.strip():
                 container_ids = result.stdout.strip().split("\n")
                 for container_id in container_ids:
-                    # Check if container name matches renv patterns
+                    # Check if container name matches wtd patterns
                     inspect_result = subprocess.run(
                         ["docker", "inspect", "--format", "{{.Name}}", container_id],
                         capture_output=True,
@@ -1198,8 +1199,8 @@ def prune_all() -> int:
                     )
                     if inspect_result.stdout.strip():
                         container_name = inspect_result.stdout.strip().lstrip("/")
-                        # Remove containers that match renv naming patterns
-                        if any(pattern in container_name for pattern in ["renv-", "-main", "-dev"]):
+                        # Remove containers that match wtd naming patterns
+                        if any(pattern in container_name for pattern in ["wtd-", "-main", "-dev"]):
                             print(f"Removing container: {container_name}")
                             subprocess.run(
                                 ["docker", "stop", container_id], check=False, capture_output=True
@@ -1213,11 +1214,11 @@ def prune_all() -> int:
         except subprocess.CalledProcessError:
             pass
 
-        # Get renv-related images and remove them
+        # Get wtd-related images and remove them
         try:
-            # Remove images with renv prefix
+            # Remove images with wtd prefix
             result = subprocess.run(
-                ["docker", "images", "--filter", "reference=renv/*", "-q"],
+                ["docker", "images", "--filter", "reference=wtd/*", "-q"],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -1243,7 +1244,7 @@ def prune_all() -> int:
         except subprocess.CalledProcessError:
             pass
 
-        # Remove renv cache and workspaces folders
+        # Remove wtd cache and workspaces folders
         cache_dir = str(get_cache_dir())
         workspaces_dir = str(get_workspaces_dir())
         for folder in [cache_dir, workspaces_dir]:
@@ -1255,12 +1256,12 @@ def prune_all() -> int:
         if removed_containers or removed_images:
             print(f"Pruned {len(removed_containers)} containers and {len(removed_images)} images")
         else:
-            print("No renv resources found to prune")
+            print("No wtd resources found to prune")
 
-        logging.info("Pruned all renv-related containers, images, and folders")
+        logging.info("Pruned all wtd-related containers, images, and folders")
         return 0
     except Exception as e:
-        logging.error(f"Failed to prune all renv resources: {e}")
+        logging.error(f"Failed to prune all wtd resources: {e}")
         return 1
 
 
@@ -1318,18 +1319,18 @@ def cmd_doctor(args) -> int:  # pylint: disable=unused-argument
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        prog="renv",
-        usage="renv [OPTIONS] [-e ext1 ext2 ...] <owner>/<repo>[@<branch>][#<subfolder>] [command...]",
+        prog="wtd",
+        usage="wtd [OPTIONS] [-e ext1 ext2 ...] <owner>/<repo>[@<branch>][#<subfolder>] [command...]",
         description="""A development environment launcher using Docker, Git worktrees, and Buildx/Bake.
 
 Clones and manages repositories in isolated git worktrees, builds cached container environments using Docker Buildx + Bake, and launches fully configured shells or commands inside each branch-specific container workspace.""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  renv blooop/test_renv@main
-  renv -e uv blooop/test_renv@feature/foo
-  renv -e git uv blooop/test_renv@main#src
-  renv blooop/test_renv git status
-  renv -e pixi blooop/test_renv@dev "bash -c 'git pull && make test'"
+  wtd blooop/test_renv@main
+  wtd -e uv blooop/test_renv@feature/foo
+  wtd -e git uv blooop/test_renv@main#src
+  wtd blooop/test_renv git status
+  wtd -e pixi blooop/test_renv@dev "bash -c 'git pull && make test'"
 
 Commands:
   launch       Launch container for the given repo and branch (default behavior)
@@ -1348,13 +1349,13 @@ Arguments:
   [command ...]    Command to run inside the container
 
 Environment:
-  RENV_CACHE_DIR            Set custom cache directory (default: ~/.renv/)
-  RENV_BASE_IMAGE           Override base image used for environments
-  RENV_CACHE_REGISTRY       Push/pull extension build cache to a registry
+  wtd_CACHE_DIR            Set custom cache directory (default: ~/.wtd/)
+  wtd_BASE_IMAGE           Override base image used for environments
+  wtd_CACHE_REGISTRY       Push/pull extension build cache to a registry
 
 Notes:
-  - Worktrees are stored under ~/.renv/workspaces/<owner>/<repo>/worktree-<branch>
-  - Extensions can be configured via .renv.yml in the repo
+  - Worktrees are stored under ~/.wtd/workspaces/<owner>/<repo>/worktree-<branch>
+  - Extensions can be configured via .wtd.yml in the repo
   - Extension images are hashed and reused across repos/branches automatically
   - Supports Docker socket sharing (DOOD) and Docker-in-Docker (DinD) setups
 """,
@@ -1411,8 +1412,8 @@ Notes:
     )
     parser.add_argument(
         "--builder",
-        default="renv_builder",
-        help="Use a custom Buildx builder name (default: renv_builder)",
+        default="wtd_builder",
+        help="Use a custom Buildx builder name (default: wtd_builder)",
     )
     parser.add_argument(
         "--platforms", help="Target platforms for Buildx (e.g. linux/amd64,linux/arm64)"
