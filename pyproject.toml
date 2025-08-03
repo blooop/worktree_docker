@@ -1,24 +1,35 @@
 [project]
-name = "worktree_docker"
-version = "0.2.0"
+name = "rockerc"
+version = "0.7.1"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
-description = "A python package template"
+description = "A tool to parse rockerc.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
 license = "MIT"
 
-dependencies = []
+dependencies = [
+  "rocker>=0.2.17",
+  "deps-rocker>=0.10",
+  "off-your-rocker>=0.1.0",
+  "pyyaml>=5",
+  "iterfzf>=1.0.0",
+]
+
+[tool.pixi.pypi-dependencies]
+rockerc = { path = ".", editable = true }
 
 [project.urls]
-Source = "https://github.com/blooop/worktree_docker"
-Home = "https://github.com/blooop/worktree_docker"
+Source = "https://github.com/blooop/rockerc"
+Home = "https://github.com/blooop/rockerc"
 
 [tool.pixi.project]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 
 [tool.pixi.dependencies]
-python = ">=3.10"
+python = ">=3.9"
 
+[tool.pixi.feature.py309.dependencies]
+python = "3.9.*"
 [tool.pixi.feature.py310.dependencies]
 python = "3.10.*"
 [tool.pixi.feature.py311.dependencies]
@@ -29,30 +40,43 @@ python = "3.12.*"
 python = "3.13.*"
 
 
-[tool.pixi.pypi-dependencies]
-worktree_docker = { path = ".", editable = true }
-
 [project.optional-dependencies]
 test = [
+  "black>=23,<=25.1.0",
   "pylint>=3.2.5,<=3.3.7",
   "pytest-cov>=4.1,<=6.2.1",
   "pytest>=7.4,<=8.4.1",
   "hypothesis>=6.104.2,<=6.135.20",
   "ruff>=0.5.0,<=0.12.1",
   "coverage>=7.5.4,<=7.9.1",
-  "pre-commit<=4.2.0",
 ]
+#These are a list of externally maintained rocker extensions. use pip install rockerc[extensions] to install all of them
+extensions = [
+  "pixi-rocker>=0.0.9",
+  "palanteer-rocker>=0.0.1",
+  "lazygit-rocker>=0.0.1",
+  "ghrocker==0.0.10",
+  "groot-rocker==0.4.1",
+  "cargo-rocker==0.0.3",
+]
+
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-include = ["worktree_docker"]
+include = ["rockerc"]
+
+[project.scripts]
+rockerc = "rockerc.rockerc:run_rockerc"
+renv = "rockerc.renv:main"
+dwt = "rockerc.renv:main"
 
 # Environments
 [tool.pixi.environments]
 default = { features = ["test"], solve-group = "default" }
+py309 = ["py309", "test"]
 py310 = ["py310", "test"]
 py311 = ["py311", "test"]
 py312 = ["py312", "test"]
@@ -60,9 +84,7 @@ py313 = ["py313", "test"]
 
 
 [tool.pixi.tasks]
-pre-commit = "pre-commit run -a"
-pre-commit-update = "pre-commit autoupdate"
-format = "ruff format ."
+format = "black ."
 check-clean-workspace = "git diff --exit-code"
 ruff-lint = "ruff check . --fix"
 pylint = "pylint --version && echo 'running pylint...' && pylint $(git ls-files '*.py')"
@@ -75,7 +97,7 @@ coverage-report = "coverage report -m"
 update-lock = "pixi update && git commit -a -m'update pixi.lock' || true"
 push = "git push"
 update-lock-push = { depends-on = ["update-lock", "push"] }
-fix = { depends-on = ["update-lock", "format", "ruff-lint", "pre-commit"] }
+fix = { depends-on = ["update-lock", "format", "ruff-lint"] }
 fix-commit-push = { depends-on = ["fix", "commit-format", "update-lock-push"] }
 ci-no-cover = { depends-on = ["style", "test"] }
 ci = { depends-on = [
@@ -95,8 +117,28 @@ extension-pkg-whitelist = ["numpy"]
 jobs = 16                           #detect number of cores
 
 [tool.pylint.'MESSAGES CONTROL']
-disable = "C,logging-fstring-interpolation,line-too-long,fixme,broad-exception-caught,missing-module-docstring,too-many-instance-attributes,too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements,use-dict-literal,cyclic-import,duplicate-code,too-many-public-methods"
+disable = "C,logging-fstring-interpolation,line-too-long,fixme,broad-exception-caught,missing-module-docstring,too-many-instance-attributes,too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements,use-dict-literal,cyclic-import,duplicate-code,too-many-public-methods,too-many-nested-blocks,too-many-return-statements"
 enable = "no-else-return,consider-using-in"
+
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100 # Same as Black.
+
+target-version = "py310"
+
+[tool.ruff.lint]
+# Never enforce `E501` (line length violations).
+#"F841" will auto remove unused variables which is annoying during development, pylint catches this anyway
+ignore = ["E501", "E902", "F841"]
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Ignore `E402` (import violations) in all `__init__.py` files, and in `path/to/file.py`.
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402", "F401"]
+
 
 [tool.coverage.run]
 omit = ["*/test/*", "__init__.py"]
