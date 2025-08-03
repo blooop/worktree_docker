@@ -27,7 +27,7 @@ TEST_HOME="/tmp/wtd_test_home"
 mkdir -p "$TEST_HOME"
 
 # Run with modified HOME to avoid polluting user's actual completion
-HOME="$TEST_HOME" pixi run python -m rockerc.wtd --install
+HOME="$TEST_HOME" pixi run python -m worktree_docker.wtd --install
 
 # Check that bash completion was created
 if [ -f "$TEST_HOME/.bash_completion.d/wtd" ]; then
@@ -66,7 +66,7 @@ fi
 echo "=== STEP 3: TEST HELP SHOWS INSTALL OPTION ==="
 
 # Test that help shows the install option
-HELP_OUTPUT=$(pixi run python -m rockerc.wtd --help 2>&1)
+HELP_OUTPUT=$(pixi run python -m worktree_docker.wtd --help 2>&1)
 
 if echo "$HELP_OUTPUT" | grep -q "Install shell auto-completion"; then
     echo "✓ Help shows --install option"
@@ -79,7 +79,7 @@ fi
 echo "=== STEP 4: TEST COMPLETION WITH UNSUPPORTED SHELL ==="
 
 # Test with an unsupported shell environment
-SHELL="/bin/unsupported_shell" HOME="$TEST_HOME" pixi run python -m rockerc.wtd --install 2>&1 | tee /tmp/install_output
+SHELL="/bin/unsupported_shell" HOME="$TEST_HOME" pixi run python -m worktree_docker.wtd --install 2>&1 | tee /tmp/install_output
 
 if grep -q "Unknown shell: unsupported_shell" /tmp/install_output; then
     echo "✓ Handles unsupported shell gracefully"

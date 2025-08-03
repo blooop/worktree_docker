@@ -1,7 +1,7 @@
 
- I am adding a new tool to complement rockerc.  its called wtd and uses rocker to create a development container. You
-   can use rockerc as inspiration for how to manage rocker, but create wtd as a separate tool that calls rocker 
-  directly. rockerc expects there to be rockerc files, whereas wtd shoudl work on any repo without a rockerc file and 
+ I am adding a new tool to complement worktree_docker.  its called wtd and uses rocker to create a development container. You
+   can use worktree_docker as inspiration for how to manage rocker, but create wtd as a separate tool that calls rocker 
+  directly. worktree_docker expects there to be worktree_docker files, whereas wtd shoudl work on any repo without a worktree_docker file and 
   defines its own require extension for basic development. I have included some tempalte workflows as bash scripts, you
    must implement rocker to meeting the all the specs in the markdown file and also the tests stubs I left in 
   test/worksflows. use the pixi environment and pixi tasks to run tests and ci. you are working on the host machine   where rocker is installed. aad an executable `wtd` to the pyproject.toml.  write lots of tests and work step by test
@@ -235,13 +235,13 @@ This makes switching between repos and branches fast and error-free, even in lar
 
 ## Requirements
 - Git
-- rockerc
+- worktree_docker
 - rocker (Docker)
 
 ## Troubleshooting
 - If repo exists, latest changes are fetched
 - If worktree exists, it is reused
-- If container build fails, check `rockerc.yaml`, Docker, and rocker installation
+- If container build fails, check `worktree_docker.yaml`, Docker, and rocker installation
 
 ## Notes
 - Branch names with `/` are converted to safe directory names
