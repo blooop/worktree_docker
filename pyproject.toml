@@ -1,15 +1,12 @@
 [project]
 name = "worktree_docker"
-version = "0.7.1"
+version = "0.0.1"
 authors = [{ name = "Austin Gregg-Smith", email = "blooop@gmail.com" }]
 description = "A tool to parse worktree_docker.yaml files and pass on the arguments onto rocker"
 readme = "README.md"
 license = "MIT"
 
 dependencies = [
-  "rocker>=0.2.17",
-  "deps-rocker>=0.10",
-  "off-your-rocker>=0.1.0",
   "pyyaml>=5",
   "iterfzf>=1.0.0",
 ]
@@ -26,11 +23,9 @@ channels = ["conda-forge"]
 platforms = ["linux-64"]
 
 [tool.pixi.dependencies]
-python = ">=3.9"
+python = ">=3.10"
 pre-commit = ">=4.2.0,<5"
 
-[tool.pixi.feature.py309.dependencies]
-python = "3.9.*"
 [tool.pixi.feature.py310.dependencies]
 python = "3.10.*"
 [tool.pixi.feature.py311.dependencies]
@@ -51,16 +46,6 @@ test = [
   "ruff>=0.5.0,<=0.12.1",
   "coverage>=7.5.4,<=7.9.1",
 ]
-#These are a list of externally maintained rocker extensions. use pip install worktree_docker[extensions] to install all of them
-extensions = [
-  "pixi-rocker>=0.0.9",
-  "palanteer-rocker>=0.0.1",
-  "lazygit-rocker>=0.0.1",
-  "ghrocker==0.0.10",
-  "groot-rocker==0.4.1",
-  "cargo-rocker==0.0.3",
-]
-
 
 [build-system]
 requires = ["hatchling"]
@@ -119,11 +104,8 @@ jobs = 16                           #detect number of cores
 disable = "C,logging-fstring-interpolation,line-too-long,fixme,broad-exception-caught,missing-module-docstring,too-many-instance-attributes,too-few-public-methods,too-many-arguments,too-many-locals,too-many-branches,too-many-statements,use-dict-literal,cyclic-import,duplicate-code,too-many-public-methods,too-many-nested-blocks,too-many-return-statements"
 enable = "no-else-return,consider-using-in"
 
-[tool.black]
-line-length = 100
-
 [tool.ruff]
-line-length = 100 # Same as Black.
+line-length = 100 
 
 target-version = "py310"
 
