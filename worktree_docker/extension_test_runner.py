@@ -3,6 +3,7 @@
 Generic extension test runner.
 This script provides a generic way to test any extension that has a test.sh file.
 """
+
 import subprocess
 import sys
 from pathlib import Path

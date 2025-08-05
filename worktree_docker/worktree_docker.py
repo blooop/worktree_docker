@@ -582,7 +582,8 @@ target "final" {{
 
 
 def should_rebuild_image(
-    image_name: str, extensions: List[Extension]  # pylint: disable=unused-argument
+    image_name: str,
+    extensions: List[Extension],  # pylint: disable=unused-argument
 ) -> bool:
     """Check if image needs rebuilding based on extension hashes."""
     try:

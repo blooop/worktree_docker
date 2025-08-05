@@ -27,6 +27,7 @@ platforms = ["linux-64"]
 
 [tool.pixi.dependencies]
 python = ">=3.9"
+pre-commit = ">=4.2.0,<5"
 
 [tool.pixi.feature.py309.dependencies]
 python = "3.9.*"

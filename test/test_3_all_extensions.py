@@ -3,6 +3,7 @@
 Test all available extensions using the generic extension test runner.
 This ensures that all extensions are properly tested and working correctly.
 """
+
 import sys
 import pytest
 from worktree_docker.extension_test_runner import run_extension_test_generic

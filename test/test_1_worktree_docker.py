@@ -503,9 +503,7 @@ class TestComposeOperations:
     @patch("subprocess.run")
     @patch("os.getuid", return_value=1000)
     @patch("os.getgid", return_value=1000)
-    def test_run_compose_service_interactive(
-        self, mock_getgid, mock_getuid, mock_run
-    ):  # pylint: disable=unused-argument
+    def test_run_compose_service_interactive(self, mock_getgid, mock_getuid, mock_run):  # pylint: disable=unused-argument
         """Test running compose service interactively."""
         mock_run.return_value = Mock(returncode=0)
 
@@ -563,9 +561,7 @@ class TestComposeOperations:
     @patch("subprocess.run")
     @patch("os.getuid", return_value=1000)
     @patch("os.getgid", return_value=1000)
-    def test_run_compose_service_with_command(
-        self, mock_getgid, mock_getuid, mock_run
-    ):  # pylint: disable=unused-argument
+    def test_run_compose_service_with_command(self, mock_getgid, mock_getuid, mock_run):  # pylint: disable=unused-argument
         """Test running compose service with command."""
         mock_run.return_value = Mock(returncode=0)
 
@@ -749,9 +745,7 @@ class TestIntegration:
     @patch("subprocess.run")
     @patch("os.getuid", return_value=1000)
     @patch("os.getgid", return_value=1000)
-    def test_launch_environment_full_workflow(
-        self, mock_getgid, mock_getuid, mock_run
-    ):  # pylint: disable=unused-argument
+    def test_launch_environment_full_workflow(self, mock_getgid, mock_getuid, mock_run):  # pylint: disable=unused-argument
         """Test complete launch environment workflow."""
         # Mock all subprocess calls to succeed
         mock_run.return_value = Mock(returncode=0)
