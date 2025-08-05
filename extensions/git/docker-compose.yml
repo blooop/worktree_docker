@@ -1,0 +1,3 @@
+volumes:
+  - "~/.gitconfig:/home/wtd/.gitconfig:ro"
+  - "~/.ssh:/home/wtd/.ssh:ro"
