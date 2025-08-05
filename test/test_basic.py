@@ -1,5 +1,5 @@
 from unittest import TestCase
-from python_template.basic_class import BasicClass
+from worktree_docker.basic_class import BasicClass
 
 
 class TestBasicClass(TestCase):

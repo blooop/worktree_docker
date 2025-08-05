@@ -1,5 +1,5 @@
 {
-    "name": "python_template",
+    "name": "worktree_docker",
     "build": {
         "dockerfile": "Dockerfile",
         "context": "..",
