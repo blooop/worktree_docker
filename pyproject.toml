@@ -60,7 +60,6 @@ wtd = "worktree_docker.worktree_docker:main"
 # Environments
 [tool.pixi.environments]
 default = { features = ["test"], solve-group = "default" }
-py309 = ["py309", "test"]
 py310 = ["py310", "test"]
 py311 = ["py311", "test"]
 py312 = ["py312", "test"]
