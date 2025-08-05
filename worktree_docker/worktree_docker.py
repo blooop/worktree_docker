@@ -565,7 +565,7 @@ target "{target_name}" {{
 target "final" {{
     context = "."
     dockerfile = "Dockerfile"
-    tags = ["wtd/final:{'-'.join(ext.hash for ext in extensions)}"]
+    tags = ["wtd/final:{"-".join(ext.hash for ext in extensions)}"]
     platforms = {platforms_hcl}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
