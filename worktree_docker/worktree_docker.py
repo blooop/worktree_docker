@@ -305,7 +305,7 @@ def setup_bare_repo(repo_spec: RepoSpec) -> Path:
         try:
             subprocess.run(["git", "clone", "--bare", repo_url, str(repo_dir)], check=True)
         except subprocess.CalledProcessError as e:
-            output = e.output.decode() if hasattr(e, 'output') and e.output else str(e)
+            output = e.output.decode() if hasattr(e, "output") and e.output else str(e)
             if "Permission denied" in output or "Could not read from remote repository" in output:
                 logging.warning(f"SSH clone failed, retrying with HTTPS: {https_url}")
                 subprocess.run(["git", "clone", "--bare", https_url, str(repo_dir)], check=True)
