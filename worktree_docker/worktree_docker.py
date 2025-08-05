@@ -297,11 +297,20 @@ def setup_bare_repo(repo_spec: RepoSpec) -> Path:
     """Clone or update bare repository."""
     repo_dir = get_repo_dir(repo_spec)
     repo_url = f"git@github.com:{repo_spec.owner}/{repo_spec.repo}.git"
+    https_url = f"https://github.com/{repo_spec.owner}/{repo_spec.repo}.git"
 
     if not repo_dir.exists():
         logging.info(f"Cloning bare repository: {repo_url}")
         repo_dir.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["git", "clone", "--bare", repo_url, str(repo_dir)], check=True)
+        try:
+            subprocess.run(["git", "clone", "--bare", repo_url, str(repo_dir)], check=True)
+        except subprocess.CalledProcessError as e:
+            output = e.output.decode() if hasattr(e, 'output') and e.output else str(e)
+            if "Permission denied" in output or "Could not read from remote repository" in output:
+                logging.warning(f"SSH clone failed, retrying with HTTPS: {https_url}")
+                subprocess.run(["git", "clone", "--bare", https_url, str(repo_dir)], check=True)
+            else:
+                raise
     else:
         logging.info(f"Fetching updates for: {repo_url}")
         subprocess.run(["git", "-C", str(repo_dir), "fetch", "--all"], check=True)
