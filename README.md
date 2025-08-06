@@ -1,96 +1,259 @@
-# worktree_docker
-A template repo for python projects that is set up using [pixi](https://pixi.sh). 
 
-This has basic setup for
+# worktree_docker - Multi-Repo Environment Manager
 
-* pylint
-* ruff
-* black
-* pytest
-* git-lfs
-* basic github actions ci
-* pulling updates from this template
-* codecov
-* pypi upload
-* dependabot
-
-## Continuous Integration Status
-
-[![Ci](https://github.com/blooop/worktree_docker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/blooop/worktree_docker/actions/workflows/ci.yml?query=branch%3Amain)
-[![Codecov](https://codecov.io/gh/blooop/worktree_docker/branch/main/graph/badge.svg?token=Y212GW1PG6)](https://codecov.io/gh/blooop/worktree_docker)
-[![GitHub issues](https://img.shields.io/github/issues/blooop/worktree_docker.svg)](https://GitHub.com/blooop/worktree_docker/issues/)
-[![GitHub pull-requests merged](https://badgen.net/github/merged-prs/blooop/worktree_docker)](https://github.com/blooop/worktree_docker/pulls?q=is%3Amerged)
-[![GitHub release](https://img.shields.io/github/release/blooop/worktree_docker.svg)](https://GitHub.com/blooop/worktree_docker/releases/)
-[![License](https://img.shields.io/github/license/blooop/worktree_docker)](https://opensource.org/license/mit/)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](https://www.python.org/downloads/)
-[![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
+## Overview
 
 
-# Install
-
-There are two methods of using this project.  
-
-1. Use github to use this project as a template
-2. Clone the project and run, `scripts/update_from_template.sh` and then run the `scripts/rename_project.sh` to rename the project.
-
-If you want to use docker you may want to run the `scripts/setup_host.sh` script.  It will set up docker and nvidia-docker (assuming you are on ubuntu22.04).
-
-If you are using pixi, look at the available tasks in pyproject.toml  If you are new to pixi follow the instructions on the pixi [website](https://prefix.dev/)
-
-# Github setup
-
-There are github workflows for CI, codecov and automated pypi publishing in `ci.yml` and `publish.yml`.
-
-ci.yml uses pixi tasks to set up the environment matrix and run the various CI tasks. To set up codecov on github, you need to get a `CODECOV_TOKEN` and add it to your actions secrets.
-
-publish.yml uses [pypy-auto-publish](https://github.com/marketplace/actions/python-auto-release-pypi-github) to automatically publish to pypi if the package version number changes. You need to add a `PYPI_API_TOKEN` to your github secrets to enable this.     
+`worktree_docker` (CLI: `wtd`) is a tool for seamless multi-repo development using git worktrees and Docker containers. It automates cloning, worktree management, and container launching, making it easy to switch between branches and repositories in isolated environments.
 
 
-# Usage
+The main workflow to support is the user can type a `wtd repo_owner/repo_name` and re-enter the container seamlessly. If it needs to be built, it will build and attach. If the image is already built but not running, it will start the container and attach, and if the container is already running, it will attach to that container.
 
-There are currently two ways of running code.  The preferred way is to use pixi to manage your environment and dependencies. 
+`worktree_docker` manages the building of Dockerfiles via extensions. It automatically loads some default extensions to provide a base level of developer experience such as ssh, git, etc. The user can add their own development tools by creating an extension for it. The aim is that you only have to write a Dockerfile for your tools once, and then you can bring it along to any development environment you want via a flag.  When the user runs the `wtd` command on a repo, the user will enter a fully set up development container directly inside that git repository.
 
+`worktree_docker` automatically names the containers based on the repo name and branch name. So `wtd blooop/test_wtd@feature1` creates a docker image and container named `test_wtd-feature1` and enters a folder called `test_wtd` as that is the repo name.
+
+You can also use `wtd` to run commands directly in the container and branch. The last arguments are passed on directly to Docker. The behavior between entering a container and running a command is identical to running that command inline.
+
+
+Enable shell autocompletion:
 ```bash
-cd project
-
-$pixi run ci
-pixi run arbitrary_task
+wtd --install
+source ~/.bashrc  # or restart your terminal
 ```
 
-If you have dependencies or configuration that cannot be managed by pixi, you can use alternative tools:
 
-- [rockerc](https://github.com/blooop/rockerc): A command-line tool for dynamically creating docker containers with access to host resources such as GPU and 
-- [rockervsc](https://github.com/blooop/rockervsc): A Visual Studio Code extension that integrates rockerc functionality into [vscode remote containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers).
+## Usage
 
-These tools help you create isolated environments with specific dependencies, ensuring consistent setups across different machines.
+```
+Usage: wtd [OPTIONS] <owner>/<repo>[@<branch>][#<subfolder>] [-- <command>...]
 
-```bash
-cd project_name
+A development environment launcher using Docker, Git worktrees, and Buildx/Bake.
 
-rockerc # build and launch container with dependencies set up
-# OR
-rockervsc # build container, launch and attach vscode to that container.
+Clones and manages repositories in isolated git worktrees, builds cached container environments using Docker Buildx + Bake, and launches fully configured shells or commands inside each branch-specific container workspace.
 
-#once you are inside the container you can use the pixi workflows.
-pixi run ci
+Examples:
+  wtd blooop/test_wtd@main
+  wtd blooop/test_wtd@feature/foo
+  wtd blooop/test_wtd@main#src
+  wtd blooop/test_wtd git status
+  wtd blooop/test_wtd@dev "bash -c 'git pull && make test'"
+
+Commands:
+  launch       Launch container for the given repo and branch (default behavior)
+  list         Show active worktrees and running containers
+  destroy      Stop and remove container for a repo/branch
+  prune        Remove unused containers and cached images
+  help         Show this help message
+
+Options:
+  --install         Install shell auto-completion script (bash/zsh/fish)
+  --rebuild         Force rebuild of container and extensions, even if cached
+  --nocache         Disable use of Buildx cache (useful for clean debugging)
+  --no-gui          Disable X11 socket mounting and GUI support
+  --no-gpu          Disable GPU passthrough and NVIDIA runtime
+  --builder NAME    Use a custom Buildx builder name (default: wtd_builder)
+  --platforms LIST  Target platforms for Buildx (e.g. linux/amd64,linux/arm64)
+  --log-level LEVEL Set log verbosity: debug, info, warn, error (default: info)
+  -h, --help        Show this help message and exit
+
+Arguments:
+  <owner>/<repo>[@<branch>][#<subfolder>]
+                   GitHub repository specifier:
+                   - owner/repo (default branch = main)
+                   - @branch    (e.g. main, feature/foo)
+                   - #subfolder (working directory after container start)
+  [-- <command>...] Any command string to run inside the container (e.g. bash -c ...)
+
+Environment:
+  WTD_CACHE_DIR            Set custom cache directory (default: ~/.wtd/)
+  WTD_BASE_IMAGE           Override base image used for environments
+  WTD_CACHE_REGISTRY       Push/pull extension build cache to a registry
+
+Notes:
+  - Worktrees are stored under ~/.wtd/workspaces/<owner>/<repo>/worktree-<branch>
+  - Extensions can be configured via .wtd.yml in the repo
+  - Extension images are hashed and reused across repos/branches automatically
+  - Supports Docker socket sharing (DOOD) and Docker-in-Docker (DinD) setups
 ```
 
-## Legacy
 
-If you don't want to install rocker on your system but want to use vscode, you can run the `scripts/launch_vscode.sh` script to build and connect to a docker container. It will install rocker in a venv.  The docker container is dynamically generated using [rocker](https://github.com/osrf/rocker) and [deps rocker](https://github.com/blooop/deps_rocker).  [deps rocker](https://github.com/blooop/deps_rocker) looks at the worktree_docker.deps.yaml file to install any required apt, pip or shell scripts and launches a container that vscode attaches to. 
+### Major Workflows
+
+#### 1. Clone and Work on a Repo
+```bash
+wtd blooop/test_wtd@main
+```
+- Clones as bare repo to `~/wtd/blooop/test_wtd`
+- Creates worktree for `main` at `~/wtd/blooop/test_wtd/worktree-main`
+- Launches a container in that worktree
+- git commands work immediately on entering (i.e., enter into the correct folder for git to work with worktrees, and bare repo is mounted properly)
+
+#### 2. Switch Branches (Isolated Worktrees)
+```bash
+wtd blooop/test_wtd@feature/new-feature
+```
+- Creates new worktree for the branch
+- Launches container in the new worktree
+- Previous worktrees remain intact
+
+#### 3. Switch Back to Main
+```bash
+wtd blooop/test_wtd@main
+```
+- Re-attaches to the main branch worktree and container. Does not need to rebuild
+
+#### 4. Work on Multiple Repos
+```bash
+wtd osrf/rocker@main
+```
+- Sets up and launches a container for another repo while retaining access to existing repos and branches
+
+#### 5. Run a command in a container
+
+```bash
+wtd blooop/test_wtd git status
+```
+- Runs git status command and exits the container immediately
+
+#### 5. Run a command in a container on a branch
+
+```bash
+wtd blooop/test_wtd@main git status
+```
+
+- Runs git status command and exits the container immediately
+
+#### 5. Run a multi-stage command in a container
+
+```bash
+wtd blooop/test_wtd "bash -c 'git status; pwd; ls -l'"
+
+```
+
+- Prints the git status, the current working directory, and a list of files.
+
+#### 5. Debug or Manual Management
+```bash
+wtd blooop/test_wtd@main --no-container
+```
+- Sets up worktree but does not launch container
+
+
+
+Some of these workflows have been set up as scripts that must get run as part of testing.
+
+
+## Directory Structure
+```
+~/wtd/
+├── blooop/
+│   └── bencher/
+│       ├── HEAD
+│       ├── config
+│       ├── worktrees
+│   └── test_wtd/
+│       ├── HEAD
+│       ├── config
+│       ├── worktrees
+└── osrf/
+    └── rocker/
+        ├── HEAD
+        └── worktrees
+```
+
+
+By default, `worktree_docker` will ignore the extensions `--cwd` and `--nvidia`, and it will pass `--nocleanup` and `--persist-image` to the container. It ignores `--cwd` because it uses its own volume mounting and workspace logic.
+
+By default, `worktree_docker` has these extensions enabled:
+
+image: ubuntu:22.04
+# Default arguments enabled for container setup
+args:
+  - user    # Enable user mapping for file permissions
+  - pull    # Enable automatic image pulling
+  - git     # Enable git integration
+  - git-clone # Enable git clone support
+  - ssh     # Enable SSH support
+  - nocleanup # Prevent cleanup after run
+  - persist-image # Persist built image after run so it's always cached
+
+extension-blacklist:
+  - nvidia  # Disable NVIDIA GPU support by default
+  - create-dockerfile # Overly verbose for 3rd party repos
+  - cwd     # We have custom mounting logic
+
+
+
+
+
+## Additional Commands
+
+### List Active Environments
+```bash
+wtd list
+```
+Shows all active worktrees and running containers.
+
+### Cleanup Commands
+```bash
+wtd prune                    # Remove all unused containers and images
+wtd prune blooop/test_wtd   # Remove specific repo's resources
+```
+
+### Advanced Options
+```bash
+wtd blooop/test_wtd --rebuild    # Force rebuild even if cached
+wtd blooop/test_wtd --nocache    # Disable Buildx cache for debugging
+wtd blooop/test_wtd --no-gui     # Disable X11/GUI support
+wtd blooop/test_wtd --no-gpu     # Disable GPU passthrough
+```
+
+
+## Intelligent Autocompletion & Fuzzy Finder
+
+When running `wtd` without arguments, or with partial input, interactive fuzzy finding is enabled using `iterfzf`:
+
+- **Partial Matching**: As you type, `iterfzf` matches any part of the repo or branch name. For example, typing `bl tes ma` will match `blooop/test_wtd@main`.
+  - You can type fragments separated by spaces to quickly narrow down results.
+  - Example prompt: `Select repo@branch (type 'bl tes ma' for blooop/test_wtd@main):`
+- **User Completion**: Type a partial username and press TAB to complete based on existing directories in `~/wtd/`.
+  ```bash
+  wtd blo<TAB>    # Completes to blooop/ if ~/wtd/blooop/ exists
+  ```
+- **Repository Completion**: After a username and `/`, TAB completes repository names.
+  ```bash
+  wtd blooop/tes<TAB>    # Completes to blooop/test_wtd if ~/wtd/blooop/test_wtd exists
+  ```
+- **Branch Completion**: After a repository and `@`, TAB completes branch names using git.
+  ```bash
+  wtd blooop/test_wtd@fea<TAB>    # Completes to available branches like feature/xyz
+  ```
+- **Interactive Selection**: If no argument is provided, a fuzzy finder UI appears, allowing you to search and select from all available repo@branch combinations. You can use partial words and space-separated fragments for fast selection.
+
+This makes switching between repos and branches fast and error-free, even in large multi-repo setups.
+
+
+## Requirements
+- Git
+- Docker
+
 
 ## Troubleshooting
+- If repo exists, latest changes are fetched
+- If worktree exists, it is reused
+- If container build fails, check `wtd.yaml`, Docker, and your installation
 
-The main pixi tasks are related to CI.  Github actions runs the pixi task "ci".  The CI is mostly likely to fail from a lockfile mismatch.  Use `pixi run fix` to fix any lockfile related problems. 
 
-## vscode tasks
+## Notes
+- Branch names with `/` are converted to safe directory names
+- Multiple worktrees and containers can be active in parallel
+- Autocompletion covers user, repo, and branch names
 
-There are two core tasks.  
+---
 
-1. set \<cfg\> from active file
+For more details, see the project README or run `wtd --help`.
 
-    This sets \<cfg\> to the currently opened file in the editor
 
-2. run \<cfg\>
 
-    This runs python with the file set in \<cfg\>
+This is an example of how to use oyr-run-arg to pass arguments to docker.
