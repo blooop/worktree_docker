@@ -1,4 +1,0 @@
-name: x11
-description: X11 GUI support for graphical applications
-auto_detect:
-  # No automatic detection - typically enabled manually when GUI needed

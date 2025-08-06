@@ -1,0 +1,8 @@
+name: fzf
+description: Command-line fuzzy finder
+dependencies:
+  - user  # fzf installs to user home directory, so needs user to be created first
+auto_detect:
+  # Auto-detect in most environments - fzf is useful everywhere
+  host_paths:
+    - "/usr/bin/bash"  # If bash exists, fzf is useful

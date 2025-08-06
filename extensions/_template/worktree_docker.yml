@@ -1,0 +1,50 @@
+# Extension Manifest Template
+# This file defines the specification for worktree_docker extensions
+
+name: my_extension
+description: Brief description of what this extension provides
+
+# Optional: List of extension names this extension depends on
+# These dependencies will be automatically loaded before this extension
+# Example: ["npm", "git", "base"]
+dependencies:
+  - base
+  - git
+
+# Optional: Always load this extension regardless of auto-detection
+# Useful for essential tools like x11, fzf, etc.
+always_load: false
+
+# Optional: Auto-detection patterns to automatically enable this extension
+auto_detect:
+  # File patterns (regex) to match in repository root
+  files:
+    - "^package\\.json$"
+    - "^my_config\\.toml$"
+  
+  # Directory patterns (regex) to match in repository root
+  directories:
+    - "^node_modules$"
+    - "^my_tool_dir$"
+  
+  # Host system paths to check for tool availability
+  host_paths:
+    - "/usr/local/bin/my_tool"
+    - "~/.my_tool"
+
+# Optional: Version constraints for extension compatibility
+version: "1.0.0"
+min_wtd_version: "0.1.0"
+
+# Optional: Platform constraints
+platforms:
+  - linux/amd64
+  - linux/arm64
+
+# Optional: Extension metadata
+author: "Your Name"
+homepage: "https://github.com/author/my_extension"
+license: "MIT"
+keywords:
+  - tool
+  - development

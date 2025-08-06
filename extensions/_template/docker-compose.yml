@@ -1,0 +1,42 @@
+# Template docker-compose fragment for worktree_docker extension
+# This file defines additional Docker Compose configuration for your extension
+
+# Environment variables to pass to the container
+environment:
+  MY_TOOL_ENV: "production"
+  MY_TOOL_CONFIG_PATH: "/workspace/.my-tool"
+
+# Additional volumes to mount
+volumes:
+  # Mount host directory (example: tool cache)
+  - "${HOME}/.my-tool:/home/wtd/.my-tool"
+  
+  # Mount system paths (example: for GUI tools)
+  # - "/tmp/.X11-unix:/tmp/.X11-unix:rw"
+  
+  # Mount configuration files
+  # - "${HOME}/.my-tool-config:/workspace/.my-tool-config:ro"
+
+# Optional: Network configuration
+# network_mode: "host"
+
+# Optional: Runtime configuration (for GPU, etc.)
+# runtime: "nvidia"
+
+# Optional: Build arguments (passed during image build)
+# build:
+#   args:
+#     MY_TOOL_VERSION: "latest"
+#     BUILD_FLAGS: "--optimize"
+
+# Optional: Device access (for hardware access)
+# devices:
+#   - "/dev/my-device:/dev/my-device"
+
+# Optional: Capabilities
+# cap_add:
+#   - SYS_ADMIN
+
+# Optional: Security options
+# security_opt:
+#   - "seccomp:unconfined"

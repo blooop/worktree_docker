@@ -160,7 +160,7 @@ class ExtensionManager:
                 compose_fragment = yaml.safe_load(f) or {}
 
         # Load manifest data if available
-        manifest_path = ext_dir / "worktree_docker.yaml"
+        manifest_path = ext_dir / "worktree_docker.yml"
         manifest = {}
         if manifest_path.exists():
             with open(manifest_path, "r", encoding="utf-8") as f:
@@ -169,7 +169,7 @@ class ExtensionManager:
         # Load any additional files (including test.sh)
         files = {}
         for file_path in ext_dir.glob("*"):
-            if file_path.name not in ["Dockerfile", "docker-compose.yml", "worktree_docker.yaml"]:
+            if file_path.name not in ["Dockerfile", "docker-compose.yml", "worktree_docker.yml"]:
                 if file_path.is_file():
                     files[file_path.name] = file_path.read_text(encoding="utf-8")
 
@@ -230,6 +230,49 @@ class ExtensionManager:
 
         return sorted(extensions)
 
+    def discover_repo_extensions(self, repo_path: Path) -> List[str]:
+        """Discover extensions defined within repository subdirectories by grepping for worktree_docker.yml files."""
+        discovered_extensions = []
+
+        if not repo_path.exists():
+            return discovered_extensions
+
+        try:
+            # Use find and grep to locate worktree_docker.yml files in subdirectories
+            result = subprocess.run(
+                ["find", str(repo_path), "-name", "worktree_docker.yml", "-type", "f"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            if result.returncode == 0 and result.stdout.strip():
+                manifest_files = result.stdout.strip().split("\n")
+                for manifest_file in manifest_files:
+                    manifest_path = Path(manifest_file)
+
+                    # Skip the repo's own .wtd directory
+                    if ".wtd" in manifest_path.parts:
+                        continue
+
+                    try:
+                        with open(manifest_path, "r", encoding="utf-8") as f:
+                            manifest_data = yaml.safe_load(f)
+                            if manifest_data and "name" in manifest_data:
+                                ext_name = manifest_data["name"]
+                                if ext_name not in discovered_extensions:
+                                    discovered_extensions.append(ext_name)
+                                    logging.info(
+                                        f"Discovered extension '{ext_name}' in {manifest_file}"
+                                    )
+                    except Exception as e:
+                        logging.warning(f"Failed to parse extension manifest {manifest_file}: {e}")
+
+        except Exception as e:
+            logging.warning(f"Failed to discover repo extensions: {e}")
+
+        return discovered_extensions
+
 
 def get_cache_dir() -> Path:
     """Get wtd cache directory."""
@@ -282,7 +325,17 @@ def auto_detect_extensions(repo_path: Path, extension_manager: "ExtensionManager
         # Check each extension's auto-detection patterns
         for ext_name in extension_manager.list_extensions():
             extension = extension_manager.get_extension(ext_name)
-            if not extension.manifest or "auto_detect" not in extension.manifest:
+            if not extension.manifest:
+                continue
+
+            # Check for always_load extensions first
+            if extension.manifest.get("always_load", False):
+                if ext_name not in detected_extensions:
+                    detected_extensions.append(ext_name)
+                    logging.info(f"Always-load extension '{ext_name}' added")
+                continue
+
+            if "auto_detect" not in extension.manifest:
                 continue
 
             auto_detect_config = extension.manifest["auto_detect"]
@@ -335,6 +388,42 @@ def auto_detect_extensions(repo_path: Path, extension_manager: "ExtensionManager
         logging.warning(f"Failed to auto-detect extensions: {e}")
 
     return detected_extensions
+
+
+def resolve_extension_dependencies(
+    extensions: List[str], extension_manager: "ExtensionManager"
+) -> List[str]:
+    """Resolve extension dependencies and return ordered list."""
+    resolved = []
+    processing = set()
+
+    def resolve_ext(ext_name: str):
+        if ext_name in resolved:
+            return
+        if ext_name in processing:
+            logging.warning(f"Circular dependency detected for extension: {ext_name}")
+            return
+
+        processing.add(ext_name)
+
+        # Get extension and its dependencies
+        extension = extension_manager.get_extension(ext_name)
+        if extension and extension.manifest:
+            deps = extension.manifest.get("dependencies", [])
+            for dep in deps:
+                if dep not in extensions:
+                    extensions.append(dep)  # Add missing dependency
+                resolve_ext(dep)
+
+        processing.remove(ext_name)
+        if ext_name not in resolved:
+            resolved.append(ext_name)
+
+    # Resolve all extensions
+    for ext in extensions[:]:  # Copy list to avoid modification during iteration
+        resolve_ext(ext)
+
+    return resolved
 
 
 def setup_bare_repo(repo_spec: RepoSpec) -> Path:
@@ -902,6 +991,9 @@ def launch_environment(config: LaunchConfig) -> int:
         all_extensions.insert(0, "base")
     if "user" not in all_extensions:
         all_extensions.append("user")
+
+    # Resolve extension dependencies
+    all_extensions = resolve_extension_dependencies(all_extensions, ext_manager)
 
     # Load extensions
     loaded_extensions = []

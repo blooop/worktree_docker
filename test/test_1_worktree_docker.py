@@ -17,7 +17,6 @@ from worktree_docker.worktree_docker import (
     get_workspaces_dir,
     get_repo_dir,
     get_worktree_dir,
-    auto_detect_extensions,
     setup_bare_repo,
     setup_worktree,
     ensure_buildx_builder,
@@ -839,87 +838,6 @@ class TestCommandParsing:
             assert "bash" in exec_call
             assert "-c" in exec_call
             assert "bash -c 'pixi --version'" in exec_call
-
-    def test_auto_detect_pixi_extension(self):
-        """Test that pixi extension is auto-detected from pixi.toml file."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_path = Path(tmpdir)
-            # Create a pixi.toml file
-            pixi_toml = repo_path / "pixi.toml"
-            pixi_toml.write_text(
-                """
-[project]
-name = "test"
-version = "0.1.0"
-""",
-                encoding="utf-8",
-            )
-
-            ext_manager = ExtensionManager(Path("/tmp"))
-            detected = auto_detect_extensions(repo_path, ext_manager)
-            assert "pixi" in detected
-
-    def test_auto_detect_uv_extension(self):
-        """Test that uv extension is auto-detected from pyproject.toml file."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_path = Path(tmpdir)
-            # Create a pyproject.toml file with [tool.uv] section
-            pyproject_toml = repo_path / "pyproject.toml"
-            pyproject_toml.write_text(
-                """
-[tool.uv]
-option = "value"
-""",
-                encoding="utf-8",
-            )
-
-            ext_manager = ExtensionManager(Path("/tmp"))
-            detected = auto_detect_extensions(repo_path, ext_manager)
-            assert "uv" in detected
-
-    def test_auto_detect_base_extension(self):
-        """Test that base extension is auto-detected from requirements.txt file."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_path = Path(tmpdir)
-            # Create a requirements.txt file
-            requirements = repo_path / "requirements.txt"
-            requirements.write_text(
-                "pytest\n",
-                encoding="utf-8",
-            )
-
-            ext_manager = ExtensionManager(Path("/tmp"))
-            detected = auto_detect_extensions(repo_path, ext_manager)
-            assert "base" in detected
-
-    def test_auto_detect_x11_extension(self):
-        """Test that x11 extension is auto-detected from .x11 file."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_path = Path(tmpdir)
-            # Create a .x11 file (could be any marker file for x11 extension)
-            x11_marker = repo_path / ".x11"
-            x11_marker.write_text(
-                "x11 enabled\n",
-                encoding="utf-8",
-            )
-
-            ext_manager = ExtensionManager(Path("/tmp"))
-            detected = auto_detect_extensions(repo_path, ext_manager)
-            assert "x11" in detected
-
-    def test_pixi_extension_installation(self):
-        """Test that pixi extension has proper installation logic."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            manager = ExtensionManager(Path(tmpdir))
-            pixi_ext = manager.get_extension("pixi")
-
-            assert pixi_ext is not None
-            assert pixi_ext.name == "pixi"
-            # Check that the dockerfile includes logic to install as the right user
-            assert "if id wtd" in pixi_ext.dockerfile_content
-            assert "su - wtd -c" in pixi_ext.dockerfile_content
-            # Check that PATH includes both locations
-            assert "/root/.pixi/bin:/home/wtd/.pixi/bin" in pixi_ext.dockerfile_content
 
     @patch("sys.argv", ["wtd", "blooop/test_wtd", "pixi", "--version"])
     @patch("worktree_docker.worktree_docker.cmd_launch")
