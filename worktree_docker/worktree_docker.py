@@ -1064,53 +1064,94 @@ _wtd_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
     
-    # Complete commands if first word
-    if [[ ${COMP_CWORD} == 1 && "${cur}" != */* ]]; then
-        local commands="launch list prune help"
-        COMPREPLY=($(compgen -W "${commands}" -- ${cur}))
-        
-        # Also complete user names if we have workspaces
-        if [[ -d ~/.wtd/workspaces ]]; then
-            local users=$(find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
-            COMPREPLY+=($(compgen -W "${users}" -- ${cur}))
-        fi
+    # Don't complete after flags that take arguments
+    case "${prev}" in
+        --extensions|-e|--builder|--platforms|--log-level)
+            return 0
+            ;;
+    esac
+    
+    # If current word starts with -, complete options
+    if [[ "${cur}" == -* ]]; then
+        local opts="--help -h --extensions -e --list --prune --ext-list --doctor --install --rebuild --nocache --no-gui --no-gpu --builder --platforms --log-level"
+        COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
         return 0
     fi
     
     # Handle repo specifications
-    if [[ "${cur}" == */* ]]; then
-        # Contains slash - could be owner/repo or owner/repo@branch
-        if [[ "${cur}" == *@* ]]; then
-            # Has @, complete branches
-            local owner_repo="${cur%@*}"
-            local branch_prefix="${cur##*@}"
-            local owner="${owner_repo%/*}"
-            local repo="${owner_repo##*/}"
+    if [[ "${cur}" == *@* ]]; then
+        # Has @, complete branches
+        local owner_repo="${cur%@*}"
+        local branch_prefix="${cur##*@}"
+        local owner="${owner_repo%/*}"
+        local repo="${owner_repo##*/}"
+        
+        if [[ -d ~/.wtd/workspaces/${owner}/${repo} ]]; then
+            local completions=()
             
-            if [[ -d ~/.wtd/workspaces/${owner}/${repo} ]]; then
-                # Get branches from git
-                local branches=$(git -C ~/.wtd/workspaces/${owner}/${repo} branch -r 2>/dev/null | sed 's/.*origin\\///' | grep -v HEAD | sort -u)
-                # Also get local worktree branches
-                local worktree_branches=$(find ~/.wtd/workspaces/${owner}/${repo} -name "worktree-*" -type d 2>/dev/null | sed 's|.*worktree-||' | sort -u)
-                local all_branches="${branches} ${worktree_branches}"
-                COMPREPLY=($(compgen -W "${all_branches}" -P "${owner_repo}@" -- ${branch_prefix}))
+            # Get remote branches
+            if command -v git >/dev/null 2>&1; then
+                while IFS= read -r branch; do
+                    if [[ -n "${branch}" && "${branch}" == "${branch_prefix}"* ]]; then
+                        completions+=("${owner_repo}@${branch}")
+                    fi
+                done < <(git -C ~/.wtd/workspaces/${owner}/${repo} branch -r 2>/dev/null | sed 's/.*origin\\///' | grep -v HEAD | sort -u)
             fi
-        else
-            # No @, complete repo names
-            local owner="${cur%/*}"
-            local repo_prefix="${cur##*/}"
             
-            if [[ -d ~/.wtd/workspaces/${owner} ]]; then
-                local repos=$(find ~/.wtd/workspaces/${owner} -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
-                COMPREPLY=($(compgen -W "${repos}" -P "${owner}/" -- ${repo_prefix}))
-            fi
+            # Get local worktree branches
+            while IFS= read -r branch; do
+                if [[ -n "${branch}" && "${branch}" == "${branch_prefix}"* ]]; then
+                    completions+=("${owner_repo}@${branch}")
+                fi
+            done < <(find ~/.wtd/workspaces/${owner}/${repo} -name "worktree-*" -type d 2>/dev/null | sed 's|.*worktree-||' | sort -u)
+            
+            COMPREPLY=("${completions[@]}")
+        fi
+    elif [[ "${cur}" == */* ]]; then
+        # Contains slash but no @, complete repo names
+        local owner="${cur%/*}"
+        local repo_prefix="${cur##*/}"
+        
+        if [[ -d ~/.wtd/workspaces/${owner} ]]; then
+            local completions=()
+            while IFS= read -r repo; do
+                if [[ -n "${repo}" && "${repo}" == "${repo_prefix}"* ]]; then
+                    completions+=("${owner}/${repo}")
+                fi
+            done < <(find ~/.wtd/workspaces/${owner} -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
+            
+            COMPREPLY=("${completions[@]}")
         fi
     else
-        # No slash yet - complete user names
-        if [[ -d ~/.wtd/workspaces ]]; then
-            local users=$(find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
-            COMPREPLY=($(compgen -W "${users}" -S "/" -- ${cur}))
+        # No slash yet - could be command or user name
+        local completions=()
+        
+        # Add commands if this looks like a command
+        local has_repo_arg=0
+        for word in "${COMP_WORDS[@]:1}"; do
+            if [[ "${word}" == */* && "${word}" != -* ]]; then
+                has_repo_arg=1
+                break
+            fi
+        done
+        
+        if [[ ${has_repo_arg} -eq 0 ]]; then
+            if [[ "launch" == "${cur}"* ]]; then completions+=("launch"); fi
+            if [[ "list" == "${cur}"* ]]; then completions+=("list"); fi
+            if [[ "prune" == "${cur}"* ]]; then completions+=("prune"); fi
+            if [[ "help" == "${cur}"* ]]; then completions+=("help"); fi
         fi
+        
+        # Add user names if we have workspaces
+        if [[ -d ~/.wtd/workspaces ]]; then
+            while IFS= read -r user; do
+                if [[ -n "${user}" && "${user}" == "${cur}"* ]]; then
+                    completions+=("${user}/")
+                fi
+            done < <(find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
+        fi
+        
+        COMPREPLY=("${completions[@]}")
     fi
 }
 complete -F _wtd_complete wtd
