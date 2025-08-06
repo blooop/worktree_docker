@@ -15,6 +15,7 @@ import yaml
 import hashlib
 import os
 import re
+import stat
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 from pathlib import Path
@@ -489,6 +490,19 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
         fragment = ext.compose_fragment
         if not fragment:
             continue
+
+        # Special handling for SSH extension - add SSH agent socket mount when available
+        if ext.name == "ssh":
+            fragment = fragment.copy()  # Don't modify the original
+            ssh_auth_sock = os.environ.get("SSH_AUTH_SOCK")
+            if ssh_auth_sock and os.path.exists(ssh_auth_sock) and stat.S_ISSOCK(os.stat(ssh_auth_sock).st_mode):
+                # Add SSH agent socket mount
+                fragment.setdefault("volumes", []).append(f"{ssh_auth_sock}:{ssh_auth_sock}:ro")
+                fragment.setdefault("environment", {})["SSH_AUTH_SOCK"] = ssh_auth_sock
+            else:
+                # Don't set SSH_AUTH_SOCK environment variable if socket is not available
+                if "environment" in fragment:
+                    fragment["environment"].pop("SSH_AUTH_SOCK", None)
 
         # Merge volumes
         if "volumes" in fragment:
