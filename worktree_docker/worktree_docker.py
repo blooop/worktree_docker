@@ -160,7 +160,7 @@ class ExtensionManager:
                 compose_fragment = yaml.safe_load(f) or {}
 
         # Load manifest data if available
-        manifest_path = ext_dir / "manifest.yml"
+        manifest_path = ext_dir / "worktree_docker.yaml"
         manifest = {}
         if manifest_path.exists():
             with open(manifest_path, "r", encoding="utf-8") as f:
@@ -169,7 +169,7 @@ class ExtensionManager:
         # Load any additional files (including test.sh)
         files = {}
         for file_path in ext_dir.glob("*"):
-            if file_path.name not in ["Dockerfile", "docker-compose.yml", "manifest.yml"]:
+            if file_path.name not in ["Dockerfile", "docker-compose.yml", "worktree_docker.yaml"]:
                 if file_path.is_file():
                     files[file_path.name] = file_path.read_text(encoding="utf-8")
 
@@ -280,7 +280,8 @@ def auto_detect_extensions(repo_path: Path, extension_manager: "ExtensionManager
                 repo_directories.append(item.name)
 
         # Check each extension's auto-detection patterns
-        for ext_name, extension in extension_manager._builtin_extensions.items():
+        for ext_name in extension_manager.list_extensions():
+            extension = extension_manager.get_extension(ext_name)
             if not extension.manifest or "auto_detect" not in extension.manifest:
                 continue
 

@@ -855,7 +855,8 @@ version = "0.1.0"
                 encoding="utf-8",
             )
 
-            detected = auto_detect_extensions(repo_path)
+            ext_manager = ExtensionManager(Path("/tmp"))
+            detected = auto_detect_extensions(repo_path, ext_manager)
             assert "pixi" in detected
 
     def test_auto_detect_uv_extension(self):
@@ -872,7 +873,8 @@ option = "value"
                 encoding="utf-8",
             )
 
-            detected = auto_detect_extensions(repo_path)
+            ext_manager = ExtensionManager(Path("/tmp"))
+            detected = auto_detect_extensions(repo_path, ext_manager)
             assert "uv" in detected
 
     def test_auto_detect_base_extension(self):
@@ -886,7 +888,8 @@ option = "value"
                 encoding="utf-8",
             )
 
-            detected = auto_detect_extensions(repo_path)
+            ext_manager = ExtensionManager(Path("/tmp"))
+            detected = auto_detect_extensions(repo_path, ext_manager)
             assert "base" in detected
 
     def test_auto_detect_x11_extension(self):
@@ -900,7 +903,8 @@ option = "value"
                 encoding="utf-8",
             )
 
-            detected = auto_detect_extensions(repo_path)
+            ext_manager = ExtensionManager(Path("/tmp"))
+            detected = auto_detect_extensions(repo_path, ext_manager)
             assert "x11" in detected
 
     def test_pixi_extension_installation(self):
