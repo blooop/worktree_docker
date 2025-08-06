@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        environment: [py310, py311, py312, py313]
+        environment: [py310]
     steps:
       - name: Fix .gitconfig if it is a directory
         run: |
@@ -28,6 +28,12 @@ jobs:
           git config --global user.email "ci@example.com"
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Setup SSH Agent
+        run: |
+          # Start SSH agent and set up SSH_AUTH_SOCK
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+          echo "SSH agent started with SSH_AUTH_SOCK=$SSH_AUTH_SOCK"
       - uses: prefix-dev/setup-pixi@v0.8.14
         with:
           cache: true

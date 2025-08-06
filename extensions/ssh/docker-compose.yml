@@ -1,0 +1,5 @@
+volumes:
+  - "~/.ssh:/home/wtd/.ssh:ro"
+  - "${SSH_AUTH_SOCK}:${SSH_AUTH_SOCK}:ro"
+environment:
+  SSH_AUTH_SOCK: "${SSH_AUTH_SOCK}"
