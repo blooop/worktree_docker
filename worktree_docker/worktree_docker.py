@@ -1121,6 +1121,10 @@ _wtd_complete() {
             done < <(find ~/.wtd/workspaces/${owner} -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
             
             COMPREPLY=("${completions[@]}")
+            # Don't add space after repo name so user can type @branch
+            if [[ ${#completions[@]} -gt 0 ]]; then
+                compopt -o nospace
+            fi
         fi
     else
         # No slash yet - could be command or user name
@@ -1151,7 +1155,11 @@ _wtd_complete() {
             done < <(find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
         fi
         
+        # Set compopt to not add trailing space for directory-like completions
         COMPREPLY=("${completions[@]}")
+        if [[ ${#completions[@]} -eq 1 && "${completions[0]}" == */ ]]; then
+            compopt -o nospace
+        fi
     fi
 }
 complete -F _wtd_complete wtd
@@ -1311,8 +1319,39 @@ end
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(bash_completion)
 
-        print(f"✓ Bash completion installed to {completion_file}")
-        print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
+        # Check if .bashrc sources .bash_completion.d directory
+        bashrc_path = f"{home}/.bashrc"
+        bashrc_content = ""
+        if os.path.exists(bashrc_path):
+            with open(bashrc_path, "r", encoding="utf-8") as f:
+                bashrc_content = f.read()
+
+        # Add sourcing of .bash_completion.d if not present
+        bash_completion_d_source = """
+# Source bash completion files from ~/.bash_completion.d/
+if [ -d ~/.bash_completion.d ]; then
+    for file in ~/.bash_completion.d/*; do
+        [ -r "$file" ] && . "$file"
+    done
+fi"""
+
+        needs_update = False
+        if ".bash_completion.d" not in bashrc_content:
+            needs_update = True
+        elif "for file in ~/.bash_completion.d" not in bashrc_content:
+            needs_update = True
+
+        if needs_update:
+            with open(bashrc_path, "a", encoding="utf-8") as f:
+                f.write(bash_completion_d_source)
+            print(f"✓ Bash completion installed to {completion_file}")
+            print("✓ Added .bash_completion.d sourcing to ~/.bashrc")
+            print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
+        else:
+            print(f"✓ Bash completion installed to {completion_file}")
+            print("✓ .bashrc already configured to load completion files")
+            print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
+
         success = True
 
     elif shell == "zsh":
