@@ -8,7 +8,6 @@
     "mhutchie.git-graph",
     "tamasfe.even-better-toml",
     "ms-azuretools.vscode-docker",
-    "ryanluker.vscode-coverage-gutters",
     "jjjermiah.pixi-vscode"
   ]
 }
