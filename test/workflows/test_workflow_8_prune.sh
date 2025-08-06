@@ -34,7 +34,7 @@ else
 fi
 
 # Verify worktree is gone
-if [ -d ~/.wtd/workspaces/blooop/test_wtd/worktree-main ]; then
+if [ -d .wtd/workspaces/blooop/test_wtd/worktree-main ]; then
     echo "✗ Worktree should have been removed by selective prune"
     exit 1
 else
@@ -60,7 +60,7 @@ else
     echo "✓ All wtd containers correctly removed by full prune"
 fi
 
-if [ -d ~/.wtd ]; then
+if [ -d .wtd ]; then
     echo "✗ .wtd directory should have been removed by full prune"
     exit 1
 else

@@ -15,8 +15,8 @@ echo
 
 # Step 2: Delete .wtd folder completely
 echo "=== STEP 2: Deleting .wtd folder ==="
-echo "Removing ~/.wtd folder completely..."
-rm -rf ~/.wtd
+echo "Removing .wtd folder completely..."
+rm -rf .wtd
 echo "SUCCESS: .wtd folder deleted"
 echo
 
