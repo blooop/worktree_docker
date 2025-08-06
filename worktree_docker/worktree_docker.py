@@ -260,30 +260,24 @@ def get_available_repo_branch_combinations() -> List[str]:
 
                 repo_combinations = []
 
-                # Get all local branches (remote-tracking branches that are already fetched)
+                # Get all remote branches from bare repository
                 try:
                     result = subprocess.run(
-                        ["git", "-C", str(repo_dir), "branch", "-r"],
+                        ["git", "-C", str(repo_dir), "ls-remote", "--heads", "origin"],
                         capture_output=True,
                         text=True,
                         check=True,
                     )
 
                     for line in result.stdout.strip().split("\n"):
-                        if (
-                            line.strip() and "origin/" in line and " -> " not in line
-                        ):  # Skip HEAD -> origin/main lines
-                            # Extract branch name from origin/branch_name
-                            branch = (
-                                line.strip().split("origin/", 1)[1]
-                                if "origin/" in line
-                                else line.strip()
-                            )
+                        if line.strip() and "refs/heads/" in line:
+                            # Extract branch name from refs/heads/branch_name
+                            branch = line.strip().split("refs/heads/", 1)[1]
                             combination = f"{owner_dir.name}/{repo_dir.name}@{branch}"
                             repo_combinations.append(combination)
 
                 except subprocess.CalledProcessError:
-                    logging.debug(f"Failed to get local branches for {repo_dir}")
+                    logging.debug(f"Failed to get remote branches for {repo_dir}")
 
                 # Also get existing local worktrees from directory listing
                 for item in repo_dir.iterdir():
