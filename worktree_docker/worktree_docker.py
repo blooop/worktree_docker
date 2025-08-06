@@ -904,7 +904,7 @@ def cmd_launch(args) -> int:
     config = LaunchConfig(
         repo_spec=repo_spec,
         extensions=args.extensions or [],
-        command=args.command if args.command else None,
+        command=args.command or None,
         rebuild=args.rebuild,
         nocache=args.nocache,
         no_gui=args.no_gui,
