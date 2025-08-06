@@ -258,60 +258,31 @@ def get_available_repo_branch_combinations() -> List[str]:
                 if not repo_dir.is_dir():
                     continue
 
-                # Use git worktree list to get actual branch names
-                try:
-                    result = subprocess.run(
-                        ["git", "-C", str(repo_dir), "worktree", "list", "--porcelain"],
-                        capture_output=True,
-                        text=True,
-                        check=True,
-                    )
+                repo_combinations = []
 
-                    current_worktree = {}
-                    for line in result.stdout.strip().split("\n"):
-                        if line.startswith("worktree "):
-                            if current_worktree and "branch" in current_worktree:
-                                # Extract the worktree directory name to ensure it's one of ours
-                                worktree_path = Path(current_worktree["worktree"])
-                                if worktree_path.name.startswith("worktree-"):
-                                    combination = f"{owner_dir.name}/{repo_dir.name}@{current_worktree['branch']}"
-                                    combinations.append(combination)
-                            current_worktree = {"worktree": line.split("worktree ", 1)[1]}
-                        elif line.startswith("branch "):
-                            branch_ref = line.split("branch ", 1)[1]
-                            # Extract branch name from refs/heads/branch
-                            if branch_ref.startswith("refs/heads/"):
-                                current_worktree["branch"] = branch_ref[11:]
-                            else:
-                                current_worktree["branch"] = branch_ref
+                # Skip remote branch fetching for faster startup
+                # This avoids the delay from git ls-remote --heads origin
 
-                    # Handle the last worktree
-                    if current_worktree and "branch" in current_worktree:
-                        worktree_path = Path(current_worktree["worktree"])
-                        if worktree_path.name.startswith("worktree-"):
-                            combination = (
-                                f"{owner_dir.name}/{repo_dir.name}@{current_worktree['branch']}"
-                            )
-                            combinations.append(combination)
+                # Get existing local worktrees from directory listing (faster than git commands)
+                for item in repo_dir.iterdir():
+                    if item.is_dir() and item.name.startswith("worktree-"):
+                        branch = item.name[9:]  # Remove "worktree-" prefix
+                        # Assume branch names with hyphens are actually feature branches with slashes
+                        if "-" in branch and branch not in [
+                            "main",
+                            "master",
+                            "develop",
+                            "staging",
+                            "production",
+                        ]:
+                            actual_branch = branch.replace("-", "/")
+                        else:
+                            actual_branch = branch
+                        combination = f"{owner_dir.name}/{repo_dir.name}@{actual_branch}"
+                        repo_combinations.append(combination)
 
-                except subprocess.CalledProcessError:
-                    # Fallback to directory name parsing if git command fails
-                    for item in repo_dir.iterdir():
-                        if item.is_dir() and item.name.startswith("worktree-"):
-                            branch = item.name[9:]  # Remove "worktree-" prefix
-                            # Assume branch names with hyphens are actually feature branches with slashes
-                            if "-" in branch and branch not in [
-                                "main",
-                                "master",
-                                "develop",
-                                "staging",
-                                "production",
-                            ]:
-                                actual_branch = branch.replace("-", "/")
-                            else:
-                                actual_branch = branch
-                            combination = f"{owner_dir.name}/{repo_dir.name}@{actual_branch}"
-                            combinations.append(combination)
+                # Add all combinations for this repository
+                combinations.extend(repo_combinations)
 
     except Exception as e:
         logging.debug(f"Error getting repo@branch combinations: {e}")
@@ -346,7 +317,7 @@ def interactive_repo_selection() -> Optional[str]:
     try:
         selected = iterfzf(
             combinations,
-            prompt="Select repo@branch (type fragments like 'bl tes ma' for blooop/test_wtd@main): ",
+            prompt="Select repo@branch: ",
         )
         return selected
     except KeyboardInterrupt:
@@ -1129,7 +1100,7 @@ _wtd_complete() {
                     if [[ -n "${branch}" && "${branch}" == "${branch_prefix}"* ]]; then
                         completions+=("${owner_repo}@${branch}")
                     fi
-                done < <(git -C ~/.wtd/workspaces/${owner}/${repo} branch -r 2>/dev/null | sed 's/.*origin\\///' | grep -v HEAD | sort -u)
+                done < <(git -C ~/.wtd/workspaces/${owner}/${repo} ls-remote --heads origin 2>/dev/null | sed 's/.*refs\\/heads\\///' | sort -u)
             fi
             
             # Get local worktree branches
@@ -1232,7 +1203,7 @@ _wtd_repo_spec() {
         
         if [[ -d ~/.wtd/workspaces/$owner/$repo ]]; then
             local branches
-            branches=($(git -C ~/.wtd/workspaces/$owner/$repo branch -r 2>/dev/null | sed 's/.*origin\\///' | grep -v HEAD))
+            branches=($(git -C ~/.wtd/workspaces/$owner/$repo ls-remote --heads origin 2>/dev/null | sed 's/.*refs\\/heads\\///'))
             # Add worktree branches
             branches+=($(find ~/.wtd/workspaces/$owner/$repo -name "worktree-*" -type d 2>/dev/null | sed 's|.*worktree-||'))
             
@@ -1319,7 +1290,7 @@ function __wtd_complete_branches
     set -l repo (string split -f 2 / $owner_repo)
     if test -d ~/.wtd/workspaces/$owner/$repo
         # Get remote branches
-        git -C ~/.wtd/workspaces/$owner/$repo branch -r 2>/dev/null | sed 's/.*origin\\///' | grep -v HEAD | string replace -r "^" "$owner_repo@"
+        git -C ~/.wtd/workspaces/$owner/$repo ls-remote --heads origin 2>/dev/null | sed 's/.*refs\\/heads\\///' | string replace -r "^" "$owner_repo@"
         # Get worktree branches
         find ~/.wtd/workspaces/$owner/$repo -name "worktree-*" -type d 2>/dev/null | sed 's|.*worktree-||' | string replace -r "^" "$owner_repo@"
     end
