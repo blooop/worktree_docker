@@ -4,6 +4,7 @@ description: Claude Code CLI for AI-assisted coding
 dependencies:
   - base
   - npm
+  - user
 
 always_load: false
 
