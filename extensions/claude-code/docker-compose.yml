@@ -1,0 +1,10 @@
+# Environment variables for Claude Code
+environment:
+  CLAUDE_CONFIG_DIR: "/home/wtd/.config/claude-code"
+  
+# Additional volumes to persist Claude Code configuration
+volumes:
+  # Persist Claude Code configuration and cache
+  - "${HOME}/.config/claude-code:/home/wtd/.config/claude-code"
+  # Persist Claude Code data
+  - "${HOME}/.local/share/claude-code:/home/wtd/.local/share/claude-code"

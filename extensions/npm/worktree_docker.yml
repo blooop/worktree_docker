@@ -1,0 +1,30 @@
+name: npm
+description: Node.js and npm package manager for JavaScript development
+
+dependencies:
+  - base
+
+always_load: false
+
+auto_detect:
+  files:
+    - "^package\\.json$"
+    - "^package-lock\\.json$"
+    - "^\\.nvmrc$"
+  directories:
+    - "^node_modules$"
+
+version: "1.0.0"
+min_wtd_version: "0.1.0"
+
+platforms:
+  - linux/amd64
+  - linux/arm64
+
+author: "worktree_docker"
+license: "MIT"
+keywords:
+  - nodejs
+  - npm
+  - javascript
+  - package-manager

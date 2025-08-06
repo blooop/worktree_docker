@@ -1,0 +1,30 @@
+name: claude-code
+description: Claude Code CLI for AI-assisted coding
+
+dependencies:
+  - base
+  - npm
+
+always_load: false
+
+auto_detect:
+  files:
+    - "^CLAUDE\\.md$"
+    - "^\\.claude\\.md$"
+  directories:
+    - "^\\.claude$"
+
+version: "1.0.0"
+min_wtd_version: "0.1.0"
+
+platforms:
+  - linux/amd64
+  - linux/arm64
+
+author: "worktree_docker"
+license: "MIT"
+keywords:
+  - claude
+  - ai
+  - coding-assistant
+  - anthropic
