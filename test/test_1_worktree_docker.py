@@ -329,7 +329,6 @@ class TestBuildxOperations:
     def test_ensure_buildx_builder_create_failure(self, mock_run):
         """Test builder creation failure returns False and logs error."""
         import subprocess
-        from unittest.mock import patch
 
         # First call (inspect) fails, second call (create) raises error
         mock_run.side_effect = [
