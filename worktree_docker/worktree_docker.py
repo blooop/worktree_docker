@@ -280,12 +280,26 @@ def auto_detect_extensions(repo_path: Path) -> List[str]:
             if item.is_file():
                 filename = item.name
                 for pattern, extension in detection_patterns:
-                    if re.match(pattern, filename, re.IGNORECASE):
-                        if extension not in detected_extensions:
-                            detected_extensions.append(extension)
-                            logging.info(
-                                f"Auto-detected extension '{extension}' from file '{filename}'"
-                            )
+                    if (
+                        re.match(pattern, filename, re.IGNORECASE)
+                        and extension not in detected_extensions
+                    ):
+                        detected_extensions.append(extension)
+                        logging.info(
+                            f"Auto-detected extension '{extension}' from file '{filename}'"
+                        )
+            elif item.is_dir() and item.name == ".ssh":
+                # Auto-detect SSH extension if .ssh directory exists
+                if "ssh" not in detected_extensions:
+                    detected_extensions.append("ssh")
+                    logging.info("Auto-detected extension 'ssh' from directory '.ssh'")
+
+        # Also check host home directory for .ssh
+        home_ssh_path = Path.home() / ".ssh"
+        if home_ssh_path.exists() and home_ssh_path.is_dir():
+            if "ssh" not in detected_extensions:
+                detected_extensions.append("ssh")
+                logging.info("Auto-detected extension 'ssh' from host ~/.ssh directory")
 
     except Exception as e:
         logging.warning(f"Failed to auto-detect extensions: {e}")
