@@ -219,8 +219,29 @@ class TestPathHelpers:
 
     @patch.dict("os.environ", {}, clear=True)
     def test_get_cache_dir_default(self):
-        """Test default cache directory."""
-        assert get_cache_dir() == Path.home() / ".wtd"
+        """Test default cache directory falls back to home if no .wtd found upward."""
+        with patch("worktree_docker.worktree_docker.Path.cwd") as mock_cwd:
+            # Mock current directory with no .wtd directory upward
+            mock_cwd.return_value = Path("/no/wtd/here")
+            with patch("pathlib.Path.exists", return_value=False):
+                assert get_cache_dir() == Path.home() / ".wtd"
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_get_cache_dir_upward_search(self):
+        """Test upward search for .wtd directory."""
+        with patch("worktree_docker.worktree_docker.Path.cwd") as mock_cwd:
+            mock_cwd.return_value = Path("/project/subdir/deep")
+
+            def mock_exists(self):
+                # Only /project/.wtd exists
+                return str(self) == "/project/.wtd"
+
+            def mock_is_dir(self):
+                return str(self) == "/project/.wtd"
+
+            with patch.object(Path, "exists", mock_exists):
+                with patch.object(Path, "is_dir", mock_is_dir):
+                    assert get_cache_dir() == Path("/project/.wtd")
 
     def test_get_workspaces_dir(self):
         """Test workspaces directory."""

@@ -13,7 +13,7 @@ cleanup() {
     wtd --prune 2>/dev/null || true
     # Fallback cleanup in case prune fails
     docker container prune -f --filter "label=wtd" 2>/dev/null || true
-    rm -rf ~/.wtd 2>/dev/null || true
+    rm -rf .wtd 2>/dev/null || true
 }
 
 # Set up cleanup trap
@@ -85,7 +85,7 @@ else
 fi
 
 # Verify worktree is gone
-if [ -d ~/.wtd/workspaces/blooop/test_wtd/worktree-new_branch ]; then
+if [ -d .wtd/workspaces/blooop/test_wtd/worktree-new_branch ]; then
     echo "✗ Worktree should have been removed by selective prune"
     exit 1
 else
@@ -112,7 +112,7 @@ else
 fi
 
 # Verify .wtd directory is gone
-if [ -d ~/.wtd ]; then
+if [ -d .wtd ]; then
     echo "✗ .wtd directory should have been removed by full prune"
     exit 1
 else

@@ -31,7 +31,7 @@ def cleanup_containers():
 
     try:
         # Remove cache directory
-        cache_dir = Path.home() / ".wtd"
+        cache_dir = Path(".wtd")
         if cache_dir.exists():
             import shutil
 

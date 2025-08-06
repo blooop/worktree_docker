@@ -232,6 +232,16 @@ def get_cache_dir() -> Path:
     cache_dir = os.getenv("WTD_CACHE_DIR")
     if cache_dir:
         return Path(cache_dir)
+
+    # Search upward for .wtd directory
+    current = Path.cwd()
+    while current != current.parent:
+        wtd_dir = current / ".wtd"
+        if wtd_dir.exists() and wtd_dir.is_dir():
+            return wtd_dir
+        current = current.parent
+
+    # Fallback to home directory if no .wtd found upward
     return Path.home() / ".wtd"
 
 
