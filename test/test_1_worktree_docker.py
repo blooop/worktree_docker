@@ -326,6 +326,23 @@ class TestBuildxOperations:
         assert "test_builder" in create_call
 
     @patch("subprocess.run")
+    def test_ensure_buildx_builder_create_failure(self, mock_run):
+        """Test builder creation failure returns False and logs error."""
+        import subprocess
+        from unittest.mock import patch
+
+        # First call (inspect) fails, second call (create) raises error
+        mock_run.side_effect = [
+            Mock(returncode=1),  # inspect fails
+            subprocess.CalledProcessError(1, ["docker", "buildx", "create", "test_builder"]),  # create fails
+        ]
+
+        with patch("worktree_docker.worktree_docker.logger") as mock_logger:
+            result = ensure_buildx_builder("test_builder")
+            assert result is False
+            # Check that error was logged
+            assert mock_logger.error.called
+
     def test_ensure_buildx_builder_exists(self, mock_run):
         """Test using existing Buildx builder."""
         mock_run.return_value = Mock(returncode=0)
