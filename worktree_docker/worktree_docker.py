@@ -260,10 +260,26 @@ def get_available_repo_branch_combinations() -> List[str]:
 
                 repo_combinations = []
 
-                # Skip remote branch fetching for faster startup
-                # This avoids the delay from git ls-remote --heads origin
+                # Get all local branches (remote-tracking branches that are already fetched)
+                try:
+                    result = subprocess.run(
+                        ["git", "-C", str(repo_dir), "branch", "-r"],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
 
-                # Get existing local worktrees from directory listing (faster than git commands)
+                    for line in result.stdout.strip().split("\n"):
+                        if line.strip() and "origin/" in line and " -> " not in line:  # Skip HEAD -> origin/main lines
+                            # Extract branch name from origin/branch_name
+                            branch = line.strip().split("origin/", 1)[1] if "origin/" in line else line.strip()
+                            combination = f"{owner_dir.name}/{repo_dir.name}@{branch}"
+                            repo_combinations.append(combination)
+
+                except subprocess.CalledProcessError:
+                    logging.debug(f"Failed to get local branches for {repo_dir}")
+
+                # Also get existing local worktrees from directory listing 
                 for item in repo_dir.iterdir():
                     if item.is_dir() and item.name.startswith("worktree-"):
                         branch = item.name[9:]  # Remove "worktree-" prefix
@@ -317,7 +333,7 @@ def interactive_repo_selection() -> Optional[str]:
     try:
         selected = iterfzf(
             combinations,
-            prompt="Select repo@branch: ",
+            prompt="> ",
         )
         return selected
     except KeyboardInterrupt:
