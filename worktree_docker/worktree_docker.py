@@ -73,7 +73,6 @@ class Extension:
     dockerfile_content: str
     compose_fragment: Dict[str, Any]
     files: Dict[str, str] = field(default_factory=dict)  # Additional files to copy
-    manifest: Dict[str, Any] = field(default_factory=dict)  # Extension manifest data
 
     @property
     def hash(self) -> str:
@@ -164,17 +163,10 @@ class ExtensionManager:
             with open(compose_path, "r", encoding="utf-8") as f:
                 compose_fragment = yaml.safe_load(f) or {}
 
-        # Load manifest data if available
-        manifest_path = ext_dir / "worktree_docker.yml"
-        manifest = {}
-        if manifest_path.exists():
-            with open(manifest_path, "r", encoding="utf-8") as f:
-                manifest = yaml.safe_load(f) or {}
-
         # Load any additional files (including test.sh)
         files = {}
         for file_path in ext_dir.glob("*"):
-            if file_path.name not in ["Dockerfile", "docker-compose.yml", "worktree_docker.yml"]:
+            if file_path.name not in ["Dockerfile", "docker-compose.yml"]:
                 if file_path.is_file():
                     files[file_path.name] = file_path.read_text(encoding="utf-8")
 
@@ -183,7 +175,6 @@ class ExtensionManager:
             dockerfile_content=dockerfile_content,
             compose_fragment=compose_fragment,
             files=files,
-            manifest=manifest,
         )
 
     def get_extension(self, name: str, repo_path: Optional[Path] = None) -> Optional[Extension]:
@@ -234,49 +225,6 @@ class ExtensionManager:
                 extensions.update(d.name for d in local_exts_dir.iterdir() if d.is_dir())
 
         return sorted(extensions)
-
-    def discover_repo_extensions(self, repo_path: Path) -> List[str]:
-        """Discover extensions defined within repository subdirectories by grepping for worktree_docker.yml files."""
-        discovered_extensions = []
-
-        if not repo_path.exists():
-            return discovered_extensions
-
-        try:
-            # Use find and grep to locate worktree_docker.yml files in subdirectories
-            result = subprocess.run(
-                ["find", str(repo_path), "-name", "worktree_docker.yml", "-type", "f"],
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-
-            if result.returncode == 0 and result.stdout.strip():
-                manifest_files = result.stdout.strip().split("\n")
-                for manifest_file in manifest_files:
-                    manifest_path = Path(manifest_file)
-
-                    # Skip the repo's own .wtd directory
-                    if ".wtd" in manifest_path.parts:
-                        continue
-
-                    try:
-                        with open(manifest_path, "r", encoding="utf-8") as f:
-                            manifest_data = yaml.safe_load(f)
-                            if manifest_data and "name" in manifest_data:
-                                ext_name = manifest_data["name"]
-                                if ext_name not in discovered_extensions:
-                                    discovered_extensions.append(ext_name)
-                                    logging.info(
-                                        f"Discovered extension '{ext_name}' in {manifest_file}"
-                                    )
-                    except Exception as e:
-                        logging.warning(f"Failed to parse extension manifest {manifest_file}: {e}")
-
-        except Exception as e:
-            logging.warning(f"Failed to discover repo extensions: {e}")
-
-        return discovered_extensions
 
 
 def get_cache_dir() -> Path:
@@ -441,85 +389,40 @@ def get_worktree_dir(repo_spec: RepoSpec) -> Path:
     return get_repo_dir(repo_spec) / f"worktree-{safe_branch}"
 
 
-def auto_detect_extensions(repo_path: Path, extension_manager: "ExtensionManager") -> List[str]:
-    """Auto-detect extensions based on patterns defined in extension manifests."""
+def auto_detect_extensions(repo_path: Path) -> List[str]:
+    """Auto-detect extensions based on files present in the repository."""
     detected_extensions = []
 
+    # Extension detection patterns: (file_pattern, extension_name)
+    detection_patterns = [
+        (r"^pixi\.toml$", "pixi"),
+        (r"^pyproject\.toml$", "uv"),
+        (r"^package\.json$", "uv"),  # Could use uv for Node.js too
+        (r"^Cargo\.toml$", "uv"),  # Rust projects can benefit from uv
+        (r"^poetry\.lock$", "uv"),
+        (r"^requirements.*\.txt$", "uv"),
+        (r"^\.python-version$", "uv"),
+        (r"^environment\.ya?ml$", "uv"),  # conda env files
+        (r"^conda\.ya?ml$", "uv"),
+        (r"^Dockerfile$", "base"),
+        (r"^docker-compose\.ya?ml$", "base"),
+    ]
+
     try:
-        # Get all files and directories in the repository root
+        # Get all files in the repository root
         if not repo_path.exists():
             return detected_extensions
 
-        repo_files = []
-        repo_directories = []
-
         for item in repo_path.iterdir():
             if item.is_file():
-                repo_files.append(item.name)
-            elif item.is_dir():
-                repo_directories.append(item.name)
-
-        # Check each extension's auto-detection patterns
-        for ext_name in extension_manager.list_extensions():
-            extension = extension_manager.get_extension(ext_name)
-            if not extension.manifest:
-                continue
-
-            # Check for always_load extensions first
-            if extension.manifest.get("always_load", False):
-                if ext_name not in detected_extensions:
-                    detected_extensions.append(ext_name)
-                    logging.info(f"Always-load extension '{ext_name}' added")
-                continue
-
-            if "auto_detect" not in extension.manifest:
-                continue
-
-            auto_detect_config = extension.manifest["auto_detect"]
-            if not auto_detect_config:  # Skip if auto_detect is None or empty
-                continue
-
-            detected = False
-
-            # Check file patterns
-            if "files" in auto_detect_config:
-                for pattern in auto_detect_config["files"]:
-                    for filename in repo_files:
-                        if re.match(pattern, filename, re.IGNORECASE):
-                            detected = True
+                filename = item.name
+                for pattern, extension in detection_patterns:
+                    if re.match(pattern, filename, re.IGNORECASE):
+                        if extension not in detected_extensions:
+                            detected_extensions.append(extension)
                             logging.info(
-                                f"Auto-detected extension '{ext_name}' from file '{filename}'"
+                                f"Auto-detected extension '{extension}' from file '{filename}'"
                             )
-                            break
-                    if detected:
-                        break
-
-            # Check directory patterns
-            if not detected and "directories" in auto_detect_config:
-                for pattern in auto_detect_config["directories"]:
-                    for dirname in repo_directories:
-                        if re.match(pattern, dirname, re.IGNORECASE):
-                            detected = True
-                            logging.info(
-                                f"Auto-detected extension '{ext_name}' from directory '{dirname}'"
-                            )
-                            break
-                    if detected:
-                        break
-
-            # Check host paths
-            if not detected and "host_paths" in auto_detect_config:
-                for host_path_str in auto_detect_config["host_paths"]:
-                    host_path = Path(host_path_str).expanduser()
-                    if host_path.exists():
-                        detected = True
-                        logging.info(
-                            f"Auto-detected extension '{ext_name}' from host path '{host_path}'"
-                        )
-                        break
-
-            if detected and ext_name not in detected_extensions:
-                detected_extensions.append(ext_name)
 
     except Exception as e:
         logging.warning(f"Failed to auto-detect extensions: {e}")
@@ -527,55 +430,15 @@ def auto_detect_extensions(repo_path: Path, extension_manager: "ExtensionManager
     return detected_extensions
 
 
-def resolve_extension_dependencies(
-    extensions: List[str], extension_manager: "ExtensionManager"
-) -> List[str]:
-    """Resolve extension dependencies and return ordered list."""
-    resolved = []
-    processing = set()
-
-    def resolve_ext(ext_name: str):
-        if ext_name in resolved:
-            return
-        if ext_name in processing:
-            logging.warning(f"Circular dependency detected for extension: {ext_name}")
-            return
-
-        processing.add(ext_name)
-
-        # Get extension and its dependencies
-        extension = extension_manager.get_extension(ext_name)
-        if extension and extension.manifest:
-            deps = extension.manifest.get("dependencies", [])
-            for dep in deps:
-                if dep not in extensions:
-                    extensions.append(dep)  # Add missing dependency
-                resolve_ext(dep)
-
-        processing.remove(ext_name)
-        if ext_name not in resolved:
-            resolved.append(ext_name)
-
-    # Resolve all extensions
-    for ext in extensions[:]:  # Copy list to avoid modification during iteration
-        resolve_ext(ext)
-
-    return resolved
-
-
 def setup_bare_repo(repo_spec: RepoSpec) -> Path:
     """Clone or update bare repository."""
     repo_dir = get_repo_dir(repo_spec)
     repo_url = f"git@github.com:{repo_spec.owner}/{repo_spec.repo}.git"
-    https_url = f"https://github.com/{repo_spec.owner}/{repo_spec.repo}.git"
+
     if not repo_dir.exists():
         logging.info(f"Cloning bare repository: {repo_url}")
         repo_dir.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            subprocess.run(["git", "clone", "--bare", repo_url, str(repo_dir)], check=True)
-        except Exception as e:
-            logging.warning(f"SSH clone failed ({e}), retrying with HTTPS: {https_url}")
-            subprocess.run(["git", "clone", "--bare", https_url, str(repo_dir)], check=True)
+        subprocess.run(["git", "clone", "--bare", repo_url, str(repo_dir)], check=True)
     else:
         logging.info(f"Fetching updates for: {repo_url}")
         subprocess.run(["git", "-C", str(repo_dir), "fetch", "--all"], check=True)
@@ -745,26 +608,6 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
         fragment = ext.compose_fragment
         if not fragment:
             continue
-
-        # Special handling for SSH extension when SSH_AUTH_SOCK is not available
-        if ext.name == "ssh":
-            fragment = fragment.copy()  # Don't modify the original
-            ssh_auth_sock = os.environ.get("SSH_AUTH_SOCK")
-
-            # Only include SSH agent socket mount if available and valid
-            if ssh_auth_sock and os.path.exists(ssh_auth_sock):
-                # SSH agent socket is available, keep original fragment
-                pass
-            else:
-                # SSH agent socket not available, filter out SSH_AUTH_SOCK references
-                if "volumes" in fragment:
-                    fragment["volumes"] = [
-                        vol for vol in fragment["volumes"] if "${SSH_AUTH_SOCK}" not in vol
-                    ]
-                if "environment" in fragment and fragment["environment"]:
-                    fragment["environment"] = {
-                        k: v for k, v in fragment["environment"].items() if k != "SSH_AUTH_SOCK"
-                    }
 
         # Merge volumes
         if "volumes" in fragment:
@@ -1103,11 +946,8 @@ def launch_environment(config: LaunchConfig) -> int:
     # Load repo configuration
     repo_config = RenvConfig(worktree_dir)
 
-    # Load extension definitions first so we can use them for auto-detection
-    ext_manager = ExtensionManager(get_cache_dir())
-
-    # Auto-detect extensions based on repository contents using extension manifests
-    auto_detected = auto_detect_extensions(worktree_dir, ext_manager)
+    # Auto-detect extensions based on repository contents
+    auto_detected = auto_detect_extensions(worktree_dir)
     if auto_detected:
         print(f"Auto-detected extensions: {', '.join(auto_detected)}")
 
@@ -1126,11 +966,11 @@ def launch_environment(config: LaunchConfig) -> int:
     # Add required base extensions
     if "base" not in all_extensions:
         all_extensions.insert(0, "base")
+    if "user" not in all_extensions:
+        all_extensions.append("user")
 
-    # Resolve extension dependencies (base extension will pull in user and other dependencies)
-    all_extensions = resolve_extension_dependencies(all_extensions, ext_manager)
-
-    # Load extensions
+    # Load extension definitions
+    ext_manager = ExtensionManager(get_cache_dir())
     loaded_extensions = []
     print(f"Loading extensions: {', '.join(all_extensions)}")
     for ext_name in all_extensions:
@@ -1197,7 +1037,7 @@ def cmd_launch(args) -> int:
     config = LaunchConfig(
         repo_spec=repo_spec,
         extensions=args.extensions or [],
-        command=args.command or None,
+        command=args.command if args.command else None,
         rebuild=args.rebuild,
         nocache=args.nocache,
         no_gui=args.no_gui,
@@ -1487,39 +1327,8 @@ end
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(bash_completion)
 
-        # Check if .bashrc sources .bash_completion.d directory
-        bashrc_path = f"{home}/.bashrc"
-        bashrc_content = ""
-        if os.path.exists(bashrc_path):
-            with open(bashrc_path, "r", encoding="utf-8") as f:
-                bashrc_content = f.read()
-
-        # Add sourcing of .bash_completion.d if not present
-        bash_completion_d_source = """
-# Source bash completion files from ~/.bash_completion.d/
-if [ -d ~/.bash_completion.d ]; then
-    for file in ~/.bash_completion.d/*; do
-        [ -r "$file" ] && . "$file"
-    done
-fi"""
-
-        needs_update = False
-        if ".bash_completion.d" not in bashrc_content:
-            needs_update = True
-        elif "for file in ~/.bash_completion.d" not in bashrc_content:
-            needs_update = True
-
-        if needs_update:
-            with open(bashrc_path, "a", encoding="utf-8") as f:
-                f.write(bash_completion_d_source)
-            print(f"✓ Bash completion installed to {completion_file}")
-            print("✓ Added .bash_completion.d sourcing to ~/.bashrc")
-            print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
-        else:
-            print(f"✓ Bash completion installed to {completion_file}")
-            print("✓ .bashrc already configured to load completion files")
-            print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
-
+        print(f"✓ Bash completion installed to {completion_file}")
+        print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
         success = True
 
     elif shell == "zsh":
@@ -1956,7 +1765,7 @@ Notes:
     launch_args.repo_spec = parsed_args.repo_spec
     launch_args.command = parsed_args.command
     # Flatten extensions list since they come from action="append"
-    launch_args.extensions = parsed_args.extensions or []
+    launch_args.extensions = parsed_args.extensions if parsed_args.extensions else []
     launch_args.rebuild = parsed_args.rebuild
     launch_args.nocache = parsed_args.nocache
     launch_args.no_gui = parsed_args.no_gui

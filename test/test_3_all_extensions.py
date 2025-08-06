@@ -37,8 +37,7 @@ version = "0.1.0"
                 encoding="utf-8",
             )
 
-            ext_manager = ExtensionManager(Path("/tmp"))
-            detected = auto_detect_extensions(repo_path, ext_manager)
+            detected = auto_detect_extensions(repo_path)
             assert "pixi" in detected
 
     def test_auto_detect_uv_extension(self):
@@ -55,16 +54,14 @@ option = "value"
                 encoding="utf-8",
             )
 
-            ext_manager = ExtensionManager(Path("/tmp"))
-            detected = auto_detect_extensions(repo_path, ext_manager)
+            detected = auto_detect_extensions(repo_path)
             assert "uv" in detected
 
     def test_auto_detect_common_extensions(self):
         """Test that commonly useful extensions (x11, fzf) are auto-detected when their conditions are met."""
         with tempfile.TemporaryDirectory() as tmpdir:
             repo_path = Path(tmpdir)
-            ext_manager = ExtensionManager(Path("/tmp"))
-            detected = auto_detect_extensions(repo_path, ext_manager)
+            detected = auto_detect_extensions(repo_path)
 
             # fzf should be detected if bash exists (which it should on most systems)
             # x11 should be detected if X11 socket exists
