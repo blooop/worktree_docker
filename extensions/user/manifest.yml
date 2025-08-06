@@ -1,0 +1,4 @@
+name: user
+description: User account and permissions setup
+auto_detect:
+  # Always included as required extension - no patterns needed

@@ -1,0 +1,4 @@
+name: fzf
+description: Command-line fuzzy finder
+auto_detect:
+  # No automatic detection - typically enabled manually

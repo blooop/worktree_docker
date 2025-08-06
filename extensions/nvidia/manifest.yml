@@ -1,0 +1,6 @@
+name: nvidia
+description: NVIDIA GPU support for CUDA and machine learning workloads
+auto_detect:
+  files:
+    - "^requirements.*\\.txt$"  # Check for GPU-related packages
+  # No automatic detection - typically enabled manually when GPU needed

@@ -1,0 +1,5 @@
+name: pixi
+description: Cross-platform package manager for Python, conda, and more
+auto_detect:
+  files:
+    - "^pixi\\.toml$"

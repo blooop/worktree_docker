@@ -68,6 +68,7 @@ class Extension:
     dockerfile_content: str
     compose_fragment: Dict[str, Any]
     files: Dict[str, str] = field(default_factory=dict)  # Additional files to copy
+    manifest: Dict[str, Any] = field(default_factory=dict)  # Extension manifest data
 
     @property
     def hash(self) -> str:
@@ -158,10 +159,17 @@ class ExtensionManager:
             with open(compose_path, "r", encoding="utf-8") as f:
                 compose_fragment = yaml.safe_load(f) or {}
 
+        # Load manifest data if available
+        manifest_path = ext_dir / "manifest.yml"
+        manifest = {}
+        if manifest_path.exists():
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = yaml.safe_load(f) or {}
+
         # Load any additional files (including test.sh)
         files = {}
         for file_path in ext_dir.glob("*"):
-            if file_path.name not in ["Dockerfile", "docker-compose.yml"]:
+            if file_path.name not in ["Dockerfile", "docker-compose.yml", "manifest.yml"]:
                 if file_path.is_file():
                     files[file_path.name] = file_path.read_text(encoding="utf-8")
 
@@ -170,6 +178,7 @@ class ExtensionManager:
             dockerfile_content=dockerfile_content,
             compose_fragment=compose_fragment,
             files=files,
+            manifest=manifest,
         )
 
     def get_extension(self, name: str, repo_path: Optional[Path] = None) -> Optional[Extension]:
@@ -252,54 +261,74 @@ def get_worktree_dir(repo_spec: RepoSpec) -> Path:
     return get_repo_dir(repo_spec) / f"worktree-{safe_branch}"
 
 
-def auto_detect_extensions(repo_path: Path) -> List[str]:
-    """Auto-detect extensions based on files present in the repository."""
+def auto_detect_extensions(repo_path: Path, extension_manager: "ExtensionManager") -> List[str]:
+    """Auto-detect extensions based on patterns defined in extension manifests."""
     detected_extensions = []
 
-    # Extension detection patterns: (file_pattern, extension_name)
-    detection_patterns = [
-        (r"^pixi\.toml$", "pixi"),
-        (r"^pyproject\.toml$", "uv"),
-        (r"^package\.json$", "uv"),  # Could use uv for Node.js too
-        (r"^Cargo\.toml$", "uv"),  # Rust projects can benefit from uv
-        (r"^poetry\.lock$", "uv"),
-        (r"^requirements.*\.txt$", "uv"),
-        (r"^\.python-version$", "uv"),
-        (r"^environment\.ya?ml$", "uv"),  # conda env files
-        (r"^conda\.ya?ml$", "uv"),
-        (r"^Dockerfile$", "base"),
-        (r"^docker-compose\.ya?ml$", "base"),
-    ]
-
     try:
-        # Get all files in the repository root
+        # Get all files and directories in the repository root
         if not repo_path.exists():
             return detected_extensions
 
+        repo_files = []
+        repo_directories = []
+
         for item in repo_path.iterdir():
             if item.is_file():
-                filename = item.name
-                for pattern, extension in detection_patterns:
-                    if (
-                        re.match(pattern, filename, re.IGNORECASE)
-                        and extension not in detected_extensions
-                    ):
-                        detected_extensions.append(extension)
-                        logging.info(
-                            f"Auto-detected extension '{extension}' from file '{filename}'"
-                        )
-            elif item.is_dir() and item.name == ".ssh":
-                # Auto-detect SSH extension if .ssh directory exists
-                if "ssh" not in detected_extensions:
-                    detected_extensions.append("ssh")
-                    logging.info("Auto-detected extension 'ssh' from directory '.ssh'")
+                repo_files.append(item.name)
+            elif item.is_dir():
+                repo_directories.append(item.name)
 
-        # Also check host home directory for .ssh
-        home_ssh_path = Path.home() / ".ssh"
-        if home_ssh_path.exists() and home_ssh_path.is_dir():
-            if "ssh" not in detected_extensions:
-                detected_extensions.append("ssh")
-                logging.info("Auto-detected extension 'ssh' from host ~/.ssh directory")
+        # Check each extension's auto-detection patterns
+        for ext_name, extension in extension_manager._builtin_extensions.items():
+            if not extension.manifest or "auto_detect" not in extension.manifest:
+                continue
+
+            auto_detect_config = extension.manifest["auto_detect"]
+            if not auto_detect_config:  # Skip if auto_detect is None or empty
+                continue
+
+            detected = False
+
+            # Check file patterns
+            if "files" in auto_detect_config:
+                for pattern in auto_detect_config["files"]:
+                    for filename in repo_files:
+                        if re.match(pattern, filename, re.IGNORECASE):
+                            detected = True
+                            logging.info(
+                                f"Auto-detected extension '{ext_name}' from file '{filename}'"
+                            )
+                            break
+                    if detected:
+                        break
+
+            # Check directory patterns
+            if not detected and "directories" in auto_detect_config:
+                for pattern in auto_detect_config["directories"]:
+                    for dirname in repo_directories:
+                        if re.match(pattern, dirname, re.IGNORECASE):
+                            detected = True
+                            logging.info(
+                                f"Auto-detected extension '{ext_name}' from directory '{dirname}'"
+                            )
+                            break
+                    if detected:
+                        break
+
+            # Check host paths
+            if not detected and "host_paths" in auto_detect_config:
+                for host_path_str in auto_detect_config["host_paths"]:
+                    host_path = Path(host_path_str).expanduser()
+                    if host_path.exists():
+                        detected = True
+                        logging.info(
+                            f"Auto-detected extension '{ext_name}' from host path '{host_path}'"
+                        )
+                        break
+
+            if detected and ext_name not in detected_extensions:
+                detected_extensions.append(ext_name)
 
     except Exception as e:
         logging.warning(f"Failed to auto-detect extensions: {e}")
@@ -827,8 +856,11 @@ def launch_environment(config: LaunchConfig) -> int:
     # Load repo configuration
     repo_config = RenvConfig(worktree_dir)
 
-    # Auto-detect extensions based on repository contents
-    auto_detected = auto_detect_extensions(worktree_dir)
+    # Load extension definitions first so we can use them for auto-detection
+    ext_manager = ExtensionManager(get_cache_dir())
+
+    # Auto-detect extensions based on repository contents using extension manifests
+    auto_detected = auto_detect_extensions(worktree_dir, ext_manager)
     if auto_detected:
         print(f"Auto-detected extensions: {', '.join(auto_detected)}")
 
@@ -850,8 +882,7 @@ def launch_environment(config: LaunchConfig) -> int:
     if "user" not in all_extensions:
         all_extensions.append("user")
 
-    # Load extension definitions
-    ext_manager = ExtensionManager(get_cache_dir())
+    # Load extensions
     loaded_extensions = []
     print(f"Loading extensions: {', '.join(all_extensions)}")
     for ext_name in all_extensions:

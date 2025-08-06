@@ -1,0 +1,7 @@
+name: ssh
+description: SSH client and key management for Git operations
+auto_detect:
+  directories:
+    - "^\\.ssh$"
+  host_paths:
+    - "~/.ssh"
