@@ -1,0 +1,14 @@
+name: default
+description: Default extensions loaded for every environment
+always_load: true
+dependencies:
+  - base  # base installs fundamental system packages
+  - git   # git installs git and configures it
+  - x11   # x11 installs GUI support
+  - user  # user creates wtd user and switches to it
+  - ssh   # ssh installs openssh-client and mounts ~/.ssh
+auto_detect:
+  # Always loaded, but keep auto_detect for backward compatibility
+  files:
+    - "^Dockerfile$"
+    - "^docker-compose\\.ya?ml$"

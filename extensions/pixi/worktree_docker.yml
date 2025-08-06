@@ -1,5 +1,7 @@
 name: pixi
 description: Cross-platform package manager for Python, conda, and more
+dependencies:
+  - user  # pixi installs to user home directory, so needs user to be created first
 auto_detect:
   files:
     - "^pixi\\.toml$"

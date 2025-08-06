@@ -1,13 +1,6 @@
 name: base
 description: Base system packages and utilities
-always_load: true
-dependencies:
-  - git
-  - ssh  
-  - user
-  - x11
 auto_detect:
-  # Always loaded, but keep auto_detect for backward compatibility
   files:
     - "^Dockerfile$"
     - "^docker-compose\\.ya?ml$"

@@ -1126,10 +1126,8 @@ def launch_environment(config: LaunchConfig) -> int:
     # Add required base extensions
     if "base" not in all_extensions:
         all_extensions.insert(0, "base")
-    if "user" not in all_extensions:
-        all_extensions.append("user")
 
-    # Resolve extension dependencies
+    # Resolve extension dependencies (base extension will pull in user and other dependencies)
     all_extensions = resolve_extension_dependencies(all_extensions, ext_manager)
 
     # Load extensions
