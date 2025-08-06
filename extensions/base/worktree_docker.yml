@@ -1,0 +1,6 @@
+name: base
+description: Base system packages and utilities
+auto_detect:
+  files:
+    - "^Dockerfile$"
+    - "^docker-compose\\.ya?ml$"

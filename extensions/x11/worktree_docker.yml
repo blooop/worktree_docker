@@ -1,0 +1,6 @@
+name: x11
+description: X11 GUI support for graphical applications
+auto_detect:
+  # Auto-detect when GUI environment is available
+  host_paths:
+    - "/tmp/.X11-unix"  # X11 socket directory

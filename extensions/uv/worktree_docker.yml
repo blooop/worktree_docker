@@ -1,0 +1,12 @@
+name: uv
+description: Python package manager and virtual environment tool
+auto_detect:
+  files:
+    - "^pyproject\\.toml$"
+    - "^package\\.json$"
+    - "^Cargo\\.toml$"
+    - "^poetry\\.lock$"
+    - "^requirements.*\\.txt$"
+    - "^\\.python-version$"
+    - "^environment\\.ya?ml$"
+    - "^conda\\.ya?ml$"

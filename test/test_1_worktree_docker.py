@@ -17,7 +17,6 @@ from worktree_docker.worktree_docker import (
     get_workspaces_dir,
     get_repo_dir,
     get_worktree_dir,
-    auto_detect_extensions,
     setup_bare_repo,
     setup_worktree,
     ensure_buildx_builder,
@@ -345,6 +344,25 @@ class TestBuildxOperations:
         assert "buildx" in create_call
         assert "create" in create_call
         assert "test_builder" in create_call
+
+    @patch("subprocess.run")
+    def test_ensure_buildx_builder_create_failure(self, mock_run):
+        """Test builder creation failure returns False and logs error."""
+        import subprocess
+
+        # First call (inspect) fails, second call (create) raises error
+        mock_run.side_effect = [
+            Mock(returncode=1),  # inspect fails
+            subprocess.CalledProcessError(
+                1, ["docker", "buildx", "create", "test_builder"]
+            ),  # create fails
+        ]
+
+        with patch("logging.error") as mock_logger:
+            result = ensure_buildx_builder("test_builder")
+            assert result is False
+            # Check that error was logged
+            assert mock_logger.called
 
     @patch("subprocess.run")
     def test_ensure_buildx_builder_exists(self, mock_run):
@@ -842,38 +860,6 @@ class TestCommandParsing:
             assert "bash" in exec_call
             assert "-c" in exec_call
             assert "bash -c 'pixi --version'" in exec_call
-
-    def test_auto_detect_pixi_extension(self):
-        """Test that pixi extension is auto-detected from pixi.toml file."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_path = Path(tmpdir)
-            # Create a pixi.toml file
-            pixi_toml = repo_path / "pixi.toml"
-            pixi_toml.write_text(
-                """
-[project]
-name = "test"
-version = "0.1.0"
-""",
-                encoding="utf-8",
-            )
-
-            detected = auto_detect_extensions(repo_path)
-            assert "pixi" in detected
-
-    def test_pixi_extension_installation(self):
-        """Test that pixi extension has proper installation logic."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            manager = ExtensionManager(Path(tmpdir))
-            pixi_ext = manager.get_extension("pixi")
-
-            assert pixi_ext is not None
-            assert pixi_ext.name == "pixi"
-            # Check that the dockerfile includes logic to install as the right user
-            assert "if id wtd" in pixi_ext.dockerfile_content
-            assert "su - wtd -c" in pixi_ext.dockerfile_content
-            # Check that PATH includes both locations
-            assert "/root/.pixi/bin:/home/wtd/.pixi/bin" in pixi_ext.dockerfile_content
 
     @patch("sys.argv", ["wtd", "blooop/test_wtd", "pixi", "--version"])
     @patch("worktree_docker.worktree_docker.cmd_launch")

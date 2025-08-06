@@ -1,0 +1,5 @@
+name: git
+description: Git version control system configuration
+auto_detect:
+  directories:
+    - "^\\.git$"

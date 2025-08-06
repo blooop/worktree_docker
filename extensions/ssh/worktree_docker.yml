@@ -1,0 +1,9 @@
+name: ssh
+description: SSH client and key management for Git operations
+dependencies:
+  - user  # ssh mounts host ~/.ssh directory, so needs user to be created first
+auto_detect:
+  directories:
+    - "^\\.ssh$"
+  host_paths:
+    - "~/.ssh"
