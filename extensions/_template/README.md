@@ -60,7 +60,21 @@ Extensions are discovered by:
 3. Modify `Dockerfile` to install and configure your tool
 4. Update `docker-compose.yml` with runtime configuration
 5. Create tests in `test.sh` to verify functionality
+
 6. Test your extension with `wtd -e your_extension_name owner/repo`
+
+## How wtd Searches for Extensions in Any Repo
+
+When `wtd` loads a repository, it performs a recursive search for `worktree_docker.yml` files throughout the repo. Any directory containing this manifest is treated as an extension, allowing the repository to dynamically add new features to `wtd`—even if those features are not yet implemented in the main `wtd` project.
+
+This means:
+
+- **Any repository can define its own extensions** by including a properly formatted `worktree_docker.yml` file and supporting files (Dockerfile, docker-compose.yml, etc.).
+- **Extensions are loaded automatically** if they match auto-detection rules, are required as dependencies, or are manually specified.
+- **Local extensions take precedence** over built-in extensions with the same name, allowing for easy customization and overrides.
+- **Dynamic feature support**: Repos can add support for new tools, workflows, or integrations simply by providing an extension directory, without waiting for upstream changes in `wtd`.
+
+This approach makes `wtd` highly extensible and adaptable to new use cases, letting users and projects extend functionality as needed.
 
 ## Repository Extensions
 
