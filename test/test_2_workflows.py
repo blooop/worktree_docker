@@ -1,5 +1,6 @@
 import subprocess
 import os
+import pytest
 from pathlib import Path
 
 WORKFLOWS_DIR = Path(__file__).parent / "workflows"
@@ -14,15 +15,25 @@ def run_workflow_script(script_name, allowed_returncodes=(0, 1)):
     return output
 
 
-def test_workflow_7_wtd_recreation():
+def test_5_environment_recreation():
+    """Test wtd environment recreation and recovery"""
     output = run_workflow_script("test_workflow_7_wtd_recreation.sh", allowed_returncodes=(0,))
-    assert "=== STEP 1: Normal wtd operation ===" in output, "Step 1 not found"
-    assert "=== STEP 2: Deleting .wtd folder ===" in output, "Step 2 not found"
-    assert "=== STEP 3: Testing wtd recreation ===" in output, "Step 3 not found"
-    assert "=== STEP 4: Testing subsequent operations ===" in output, "Step 4 not found"
-    assert "=== ALL TESTS PASSED ===" in output, "Final success message not found"
-    assert "container breakout detected" not in output, "Container breakout error detected"
-    assert "OCI runtime exec failed" not in output, "OCI runtime exec failure detected"
+
+    # Verify all test steps
+    steps = [
+        "=== STEP 1: Normal wtd operation ===",
+        "=== STEP 2: Deleting .wtd folder ===",
+        "=== STEP 3: Testing wtd recreation ===",
+        "=== STEP 4: Testing subsequent operations ===",
+        "=== ALL TESTS PASSED ===",
+    ]
+    for step in steps:
+        assert step in output, f"{step} not found"
+
+    # Ensure no critical errors occurred
+    critical_errors = ["container breakout detected", "OCI runtime exec failed"]
+    for error in critical_errors:
+        assert error not in output, f"{error} error detected"
 
 
 def test_workflow_8_prune():
@@ -157,6 +168,7 @@ def test_workflow_9_container_reuse():
                 if "Removing stale container" in lines[j]:
                     stale_removal_after_reuse = True
                     break
+
     assert container_reuse_found, "Container reuse confirmation not found"
     assert not stale_removal_after_reuse, (
         "Stale container removal should not happen when reusing existing container"
@@ -210,6 +222,8 @@ def test_workflow_10_new_branch():
 
 def test_workflow_11_install_completion():
     output = run_workflow_script("test_workflow_11_install_completion.sh", allowed_returncodes=(0,))
+
+    # Test sections
     assert "=== TEST: SHELL COMPLETION INSTALLATION ===" in output, "Test start not found"
     assert "=== SHELL COMPLETION INSTALLATION TEST PASSED ===" in output, (
         "Test completion not found"
