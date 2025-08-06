@@ -337,12 +337,13 @@ class TestBuildxOperations:
             ),  # create fails
         ]
 
-        with patch("worktree_docker.worktree_docker.logger") as mock_logger:
+        with patch("logging.error") as mock_logger:
             result = ensure_buildx_builder("test_builder")
             assert result is False
             # Check that error was logged
-            assert mock_logger.error.called
+            assert mock_logger.called
 
+    @patch("subprocess.run")
     def test_ensure_buildx_builder_exists(self, mock_run):
         """Test using existing Buildx builder."""
         mock_run.return_value = Mock(returncode=0)
