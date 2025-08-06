@@ -15,6 +15,20 @@ The main workflow to support is the user can type a `wtd repo_owner/repo_name` a
 
 You can also use `wtd` to run commands directly in the container and branch. The last arguments are passed on directly to Docker. The behavior between entering a container and running a command is identical to running that command inline.
 
+## Workspace Isolation
+
+Each `wtd` instance is fully isolated from others through local `.wtd` directories:
+
+- **Local Workspaces**: `wtd` searches upward from the current directory to find the first `.wtd` folder and uses that as the workspace root
+- **Complete Isolation**: Multiple projects can run `wtd` simultaneously without affecting each other
+- **No Global State**: Each project maintains its own repositories, containers, and build cache in its local `.wtd` directory
+- **Automatic Discovery**: Simply run `wtd` from anywhere within a project tree - it will automatically find and use the appropriate workspace
+
+This means you can:
+- Have different versions of the same repository in different projects
+- Run multiple `wtd` instances simultaneously without conflicts  
+- Keep project-specific container configurations and caches isolated
+- Clean up a project completely by removing its `.wtd` directory
 
 Enable shell autocompletion:
 ```bash

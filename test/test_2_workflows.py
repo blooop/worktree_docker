@@ -1,5 +1,6 @@
 import subprocess
 import os
+import tempfile
 from pathlib import Path
 
 WORKFLOWS_DIR = Path(__file__).parent / "workflows"
@@ -8,10 +9,16 @@ WORKFLOWS_DIR = Path(__file__).parent / "workflows"
 def run_workflow_script(script_name, allowed_returncodes=(0, 1)):
     script = os.path.join(WORKFLOWS_DIR, script_name)
     os.chmod(script, 0o755)
-    result = subprocess.run([script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-    output = result.stdout.decode() + result.stderr.decode()
-    assert result.returncode in allowed_returncodes, f"{script_name} failed: {output}"
-    return output
+
+    # Create temporary directory and run script from there
+    # This ensures each test gets its own isolated .wtd directory
+    with tempfile.TemporaryDirectory(prefix="wtd_test_") as temp_dir:
+        result = subprocess.run(
+            [script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, cwd=temp_dir
+        )
+        output = result.stdout.decode() + result.stderr.decode()
+        assert result.returncode in allowed_returncodes, f"{script_name} failed: {output}"
+        return output
 
 
 def test_workflow_7_wtd_recreation():

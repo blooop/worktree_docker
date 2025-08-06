@@ -12,7 +12,7 @@ cleanup() {
     wtd --prune 2>/dev/null || true
     # Fallback cleanup in case prune fails
     docker container prune -f --filter "label=wtd" 2>/dev/null || true
-    rm -rf ~/.wtd 2>/dev/null || true
+    rm -rf .wtd 2>/dev/null || true
 }
 
 # Set up cleanup trap
