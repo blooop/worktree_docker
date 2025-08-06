@@ -30,6 +30,7 @@ The `worktree_docker.yml` file supports these fields:
 ### Optional Fields
 
 - **`dependencies`** (array) - List of extension names this extension depends on
+- **`never_load`** (array) - List of extension that are incompatible with this extension
 - **`always_load`** (boolean) - Always load this extension regardless of detection
 - **`auto_detect`** (object) - Auto-detection rules
   - **`files`** (array) - File patterns (regex) to match in repo root
@@ -63,8 +64,7 @@ Extensions are discovered by:
 
 ## Repository Extensions
 
-Extensions can also be defined locally in repositories under `.wtd/extensions/extension_name/`.
-Local extensions take precedence over built-in extensions with the same name.
+When `wtd` loads a repo it will perform a recursive search for `worktree_docker.yml` files and load those extensions.  This lets a repo add support for `wtd`. Local extensions take precedence over built-in extensions with the same name.
 
 ## Extension Filtering
 
