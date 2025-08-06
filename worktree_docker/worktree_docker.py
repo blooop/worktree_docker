@@ -1469,7 +1469,7 @@ Notes:
     launch_args.repo_spec = parsed_args.repo_spec
     launch_args.command = parsed_args.command
     # Flatten extensions list since they come from action="append"
-    launch_args.extensions = parsed_args.extensions if parsed_args.extensions else []
+    launch_args.extensions = parsed_args.extensions or []
     launch_args.rebuild = parsed_args.rebuild
     launch_args.nocache = parsed_args.nocache
     launch_args.no_gui = parsed_args.no_gui
