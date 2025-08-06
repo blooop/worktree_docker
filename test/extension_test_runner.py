@@ -188,8 +188,7 @@ def main():
     cleanup_containers()
 
     try:
-        success = run_extension_test_generic(extension_name)
-        if success:
+        if success := run_extension_test_generic(extension_name):
             print(f"\n🎉 All tests passed for {extension_name} extension!")
             sys.exit(0)
         else:
