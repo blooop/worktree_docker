@@ -33,13 +33,18 @@ else
     echo "Claude Code doctor command accessible"
 fi
 
-# Test 5: Check configuration directory exists for wtd user
+# Test 5: Check configuration directory exists and is writable for wtd user
 if id wtd >/dev/null 2>&1; then
     if ! su - wtd -c 'mkdir -p ~/.config/claude-code'; then
         echo "Could not create Claude config directory for wtd user"
         exit 1
     fi
-    echo "Claude Code configuration directory setup for wtd user"
+    # Test that the directory is writable
+    if ! su - wtd -c 'touch ~/.config/claude-code/.test && rm ~/.config/claude-code/.test'; then
+        echo "Claude config directory not writable for wtd user"
+        exit 1
+    fi
+    echo "Claude Code configuration directory setup and writable for wtd user"
 fi
 
 # Test 6: Verify npm dependency

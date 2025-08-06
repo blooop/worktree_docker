@@ -13,6 +13,9 @@ auto_detect:
     - "^\\.claude\\.md$"
   directories:
     - "^\\.claude$"
+  host_paths:
+    - "/usr/local/bin/claude"
+    - "~/.claude"
 
 version: "1.0.0"
 min_wtd_version: "0.1.0"
