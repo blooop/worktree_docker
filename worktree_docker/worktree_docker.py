@@ -270,16 +270,22 @@ def get_available_repo_branch_combinations() -> List[str]:
                     )
 
                     for line in result.stdout.strip().split("\n"):
-                        if line.strip() and "origin/" in line and " -> " not in line:  # Skip HEAD -> origin/main lines
+                        if (
+                            line.strip() and "origin/" in line and " -> " not in line
+                        ):  # Skip HEAD -> origin/main lines
                             # Extract branch name from origin/branch_name
-                            branch = line.strip().split("origin/", 1)[1] if "origin/" in line else line.strip()
+                            branch = (
+                                line.strip().split("origin/", 1)[1]
+                                if "origin/" in line
+                                else line.strip()
+                            )
                             combination = f"{owner_dir.name}/{repo_dir.name}@{branch}"
                             repo_combinations.append(combination)
 
                 except subprocess.CalledProcessError:
                     logging.debug(f"Failed to get local branches for {repo_dir}")
 
-                # Also get existing local worktrees from directory listing 
+                # Also get existing local worktrees from directory listing
                 for item in repo_dir.iterdir():
                     if item.is_dir() and item.name.startswith("worktree-"):
                         branch = item.name[9:]  # Remove "worktree-" prefix
