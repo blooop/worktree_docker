@@ -280,12 +280,26 @@ def auto_detect_extensions(repo_path: Path) -> List[str]:
             if item.is_file():
                 filename = item.name
                 for pattern, extension in detection_patterns:
-                    if re.match(pattern, filename, re.IGNORECASE):
-                        if extension not in detected_extensions:
-                            detected_extensions.append(extension)
-                            logging.info(
-                                f"Auto-detected extension '{extension}' from file '{filename}'"
-                            )
+                    if (
+                        re.match(pattern, filename, re.IGNORECASE)
+                        and extension not in detected_extensions
+                    ):
+                        detected_extensions.append(extension)
+                        logging.info(
+                            f"Auto-detected extension '{extension}' from file '{filename}'"
+                        )
+            elif item.is_dir() and item.name == ".ssh":
+                # Auto-detect SSH extension if .ssh directory exists
+                if "ssh" not in detected_extensions:
+                    detected_extensions.append("ssh")
+                    logging.info("Auto-detected extension 'ssh' from directory '.ssh'")
+
+        # Also check host home directory for .ssh
+        home_ssh_path = Path.home() / ".ssh"
+        if home_ssh_path.exists() and home_ssh_path.is_dir():
+            if "ssh" not in detected_extensions:
+                detected_extensions.append("ssh")
+                logging.info("Auto-detected extension 'ssh' from host ~/.ssh directory")
 
     except Exception as e:
         logging.warning(f"Failed to auto-detect extensions: {e}")
@@ -475,6 +489,26 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
         fragment = ext.compose_fragment
         if not fragment:
             continue
+
+        # Special handling for SSH extension when SSH_AUTH_SOCK is not available
+        if ext.name == "ssh":
+            fragment = fragment.copy()  # Don't modify the original
+            ssh_auth_sock = os.environ.get("SSH_AUTH_SOCK")
+
+            # Only include SSH agent socket mount if available and valid
+            if ssh_auth_sock and os.path.exists(ssh_auth_sock):
+                # SSH agent socket is available, keep original fragment
+                pass
+            else:
+                # SSH agent socket not available, filter out SSH_AUTH_SOCK references
+                if "volumes" in fragment:
+                    fragment["volumes"] = [
+                        vol for vol in fragment["volumes"] if "${SSH_AUTH_SOCK}" not in vol
+                    ]
+                if "environment" in fragment and fragment["environment"]:
+                    fragment["environment"] = {
+                        k: v for k, v in fragment["environment"].items() if k != "SSH_AUTH_SOCK"
+                    }
 
         # Merge volumes
         if "volumes" in fragment:
