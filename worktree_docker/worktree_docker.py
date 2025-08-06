@@ -19,6 +19,11 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 
+try:
+    from iterfzf import iterfzf
+except ImportError:
+    iterfzf = None
+
 
 @dataclass
 class RepoSpec:
@@ -233,6 +238,126 @@ def get_cache_dir() -> Path:
 def get_workspaces_dir() -> Path:
     """Get workspaces directory."""
     return get_cache_dir() / "workspaces"
+
+
+def get_available_repo_branch_combinations() -> List[str]:
+    """Get all available repo@branch combinations from workspaces."""
+    combinations = []
+    workspaces_dir = get_workspaces_dir()
+
+    if not workspaces_dir.exists():
+        return combinations
+
+    try:
+        # Walk through owner/repo directories
+        for owner_dir in workspaces_dir.iterdir():
+            if not owner_dir.is_dir():
+                continue
+
+            for repo_dir in owner_dir.iterdir():
+                if not repo_dir.is_dir():
+                    continue
+
+                # Use git worktree list to get actual branch names
+                try:
+                    result = subprocess.run(
+                        ["git", "-C", str(repo_dir), "worktree", "list", "--porcelain"],
+                        capture_output=True,
+                        text=True,
+                        check=True,
+                    )
+
+                    current_worktree = {}
+                    for line in result.stdout.strip().split("\n"):
+                        if line.startswith("worktree "):
+                            if current_worktree and "branch" in current_worktree:
+                                # Extract the worktree directory name to ensure it's one of ours
+                                worktree_path = Path(current_worktree["worktree"])
+                                if worktree_path.name.startswith("worktree-"):
+                                    combination = f"{owner_dir.name}/{repo_dir.name}@{current_worktree['branch']}"
+                                    combinations.append(combination)
+                            current_worktree = {"worktree": line.split("worktree ", 1)[1]}
+                        elif line.startswith("branch "):
+                            branch_ref = line.split("branch ", 1)[1]
+                            # Extract branch name from refs/heads/branch
+                            if branch_ref.startswith("refs/heads/"):
+                                current_worktree["branch"] = branch_ref[11:]
+                            else:
+                                current_worktree["branch"] = branch_ref
+
+                    # Handle the last worktree
+                    if current_worktree and "branch" in current_worktree:
+                        worktree_path = Path(current_worktree["worktree"])
+                        if worktree_path.name.startswith("worktree-"):
+                            combination = (
+                                f"{owner_dir.name}/{repo_dir.name}@{current_worktree['branch']}"
+                            )
+                            combinations.append(combination)
+
+                except subprocess.CalledProcessError:
+                    # Fallback to directory name parsing if git command fails
+                    for item in repo_dir.iterdir():
+                        if item.is_dir() and item.name.startswith("worktree-"):
+                            branch = item.name[9:]  # Remove "worktree-" prefix
+                            # Assume branch names with hyphens are actually feature branches with slashes
+                            if "-" in branch and branch not in [
+                                "main",
+                                "master",
+                                "develop",
+                                "staging",
+                                "production",
+                            ]:
+                                actual_branch = branch.replace("-", "/")
+                            else:
+                                actual_branch = branch
+                            combination = f"{owner_dir.name}/{repo_dir.name}@{actual_branch}"
+                            combinations.append(combination)
+
+    except Exception as e:
+        logging.debug(f"Error getting repo@branch combinations: {e}")
+
+    return sorted(list(set(combinations)))  # Remove duplicates
+
+
+def interactive_repo_selection() -> Optional[str]:
+    """Use fuzzy finder to select repo@branch combination."""
+    if iterfzf is None:
+        print("Error: iterfzf not available. Install with: pip install iterfzf")
+        return None
+
+    # Check if we have a terminal (stdin is a tty)
+    if not sys.stdin.isatty():
+        print("Error: Interactive selection requires a terminal.")
+        print("Existing repo@branch combinations:")
+        combinations = get_available_repo_branch_combinations()
+        for combo in combinations:
+            print(f"  {combo}")
+        return None
+
+    combinations = get_available_repo_branch_combinations()
+
+    if not combinations:
+        print("No existing worktrees found.")
+        print("Create your first environment by running:")
+        print("  wtd owner/repo@branch")
+        return None
+
+    # Use iterfzf for interactive selection
+    try:
+        selected = iterfzf(
+            combinations,
+            prompt="Select repo@branch (type fragments like 'bl tes ma' for blooop/test_wtd@main): ",
+        )
+        return selected
+    except KeyboardInterrupt:
+        print("\nSelection cancelled.")
+        return None
+    except Exception as e:
+        print(f"Error during selection: {e}")
+        print("Available combinations:")
+        for combo in combinations:
+            print(f"  {combo}")
+        return None
 
 
 def get_build_cache_dir(repo_spec: RepoSpec) -> Path:
@@ -939,19 +1064,53 @@ _wtd_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
     
-    # Complete commands
-    if [[ ${COMP_CWORD} == 1 ]]; then
-        COMPREPLY=($(compgen -W "launch list prune help" -- ${cur}))
+    # Complete commands if first word
+    if [[ ${COMP_CWORD} == 1 && "${cur}" != */* ]]; then
+        local commands="launch list prune help"
+        COMPREPLY=($(compgen -W "${commands}" -- ${cur}))
+        
+        # Also complete user names if we have workspaces
+        if [[ -d ~/.wtd/workspaces ]]; then
+            local users=$(find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
+            COMPREPLY+=($(compgen -W "${users}" -- ${cur}))
+        fi
         return 0
     fi
     
-    # Complete repo specs from existing workspaces
-    if [[ -d ~/.wtd/workspaces ]]; then
-        local repos=$(find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | \\
-                     sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u)
-        local branches=$(find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | \\
-                        sed 's|.*worktree-||' | sort -u)
-        COMPREPLY=($(compgen -W "${repos} ${branches}" -- ${cur}))
+    # Handle repo specifications
+    if [[ "${cur}" == */* ]]; then
+        # Contains slash - could be owner/repo or owner/repo@branch
+        if [[ "${cur}" == *@* ]]; then
+            # Has @, complete branches
+            local owner_repo="${cur%@*}"
+            local branch_prefix="${cur##*@}"
+            local owner="${owner_repo%/*}"
+            local repo="${owner_repo##*/}"
+            
+            if [[ -d ~/.wtd/workspaces/${owner}/${repo} ]]; then
+                # Get branches from git
+                local branches=$(git -C ~/.wtd/workspaces/${owner}/${repo} branch -r 2>/dev/null | sed 's/.*origin\\///' | grep -v HEAD | sort -u)
+                # Also get local worktree branches
+                local worktree_branches=$(find ~/.wtd/workspaces/${owner}/${repo} -name "worktree-*" -type d 2>/dev/null | sed 's|.*worktree-||' | sort -u)
+                local all_branches="${branches} ${worktree_branches}"
+                COMPREPLY=($(compgen -W "${all_branches}" -P "${owner_repo}@" -- ${branch_prefix}))
+            fi
+        else
+            # No @, complete repo names
+            local owner="${cur%/*}"
+            local repo_prefix="${cur##*/}"
+            
+            if [[ -d ~/.wtd/workspaces/${owner} ]]; then
+                local repos=$(find ~/.wtd/workspaces/${owner} -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
+                COMPREPLY=($(compgen -W "${repos}" -P "${owner}/" -- ${repo_prefix}))
+            fi
+        fi
+    else
+        # No slash yet - complete user names
+        if [[ -d ~/.wtd/workspaces ]]; then
+            local users=$(find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
+            COMPREPLY=($(compgen -W "${users}" -S "/" -- ${cur}))
+        fi
     fi
 }
 complete -F _wtd_complete wtd
@@ -964,30 +1123,73 @@ _wtd() {
     typeset -A opt_args
     
     _arguments \\
-        '1: :->commands' \\
+        '1: :->repo_spec' \\
         '*: :->args'
         
     case $state in
-        commands)
-            _alternative \\
-                'commands:commands:(launch list prune help)' \\
-                'repos:repositories:_wtd_repos'
+        repo_spec)
+            _wtd_repo_spec
             ;;
         args)
-            _wtd_repos
+            # Complete remaining arguments as commands
+            _command_names
             ;;
     esac
 }
 
-_wtd_repos() {
-    if [[ -d ~/.wtd/workspaces ]]; then
-        local repos branches
-        repos=($(find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | \\
-                sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u))
-        branches=($(find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | \\
-                   sed 's|.*worktree-||' | sort -u))
-        _describe 'repositories' repos
-        _describe 'branches' branches  
+_wtd_repo_spec() {
+    local current=${words[CURRENT]}
+    
+    if [[ $current == *@* ]]; then
+        # Complete branches after @
+        local owner_repo="${current%@*}"
+        local branch_prefix="${current##*@}"
+        local owner="${owner_repo%/*}"
+        local repo="${owner_repo##*/}"
+        
+        if [[ -d ~/.wtd/workspaces/$owner/$repo ]]; then
+            local branches
+            branches=($(git -C ~/.wtd/workspaces/$owner/$repo branch -r 2>/dev/null | sed 's/.*origin\\///' | grep -v HEAD))
+            # Add worktree branches
+            branches+=($(find ~/.wtd/workspaces/$owner/$repo -name "worktree-*" -type d 2>/dev/null | sed 's|.*worktree-||'))
+            
+            local completions
+            for branch in $branches; do
+                completions+=("$owner_repo@$branch:branch $branch")
+            done
+            _describe 'branches' completions
+        fi
+    elif [[ $current == */* ]]; then
+        # Complete repo names after owner/
+        local owner="${current%/*}"
+        local repo_prefix="${current##*/}"
+        
+        if [[ -d ~/.wtd/workspaces/$owner ]]; then
+            local repos
+            repos=($(find ~/.wtd/workspaces/$owner -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null))
+            
+            local completions
+            for repo in $repos; do
+                completions+=("$owner/$repo:repository $owner/$repo")
+            done
+            _describe 'repositories' completions
+        fi
+    else
+        # Complete commands and user names
+        local commands=(launch list prune help)
+        local users
+        if [[ -d ~/.wtd/workspaces ]]; then
+            users=($(find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null))
+        fi
+        
+        local completions
+        for cmd in $commands; do
+            completions+=("$cmd:command")
+        done
+        for user in $users; do
+            completions+=("$user/:user $user")
+        done
+        _describe 'commands and users' completions
     fi
 }
 
@@ -1012,10 +1214,43 @@ complete -c wtd -l no-gui -d "Disable X11/GUI support"
 complete -c wtd -l no-gpu -d "Disable GPU passthrough"
 complete -c wtd -l log-level -d "Set log level" -xa "debug info warn error"
 
-# Dynamic repo completion
+# Dynamic completion functions
+function __wtd_complete_owners
+    if test -d ~/.wtd/workspaces
+        find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null
+    end
+end
+
+function __wtd_complete_repos
+    set -l current (commandline -ct)
+    set -l owner (string split -f 1 / $current)
+    if test -d ~/.wtd/workspaces/$owner
+        find ~/.wtd/workspaces/$owner -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | string replace -r "^" "$owner/"
+    end
+end
+
+function __wtd_complete_branches
+    set -l current (commandline -ct)
+    set -l owner_repo (string split -f 1 @ $current)
+    set -l owner (string split -f 1 / $owner_repo)
+    set -l repo (string split -f 2 / $owner_repo)
+    if test -d ~/.wtd/workspaces/$owner/$repo
+        # Get remote branches
+        git -C ~/.wtd/workspaces/$owner/$repo branch -r 2>/dev/null | sed 's/.*origin\\///' | grep -v HEAD | string replace -r "^" "$owner_repo@"
+        # Get worktree branches
+        find ~/.wtd/workspaces/$owner/$repo -name "worktree-*" -type d 2>/dev/null | sed 's|.*worktree-||' | string replace -r "^" "$owner_repo@"
+    end
+end
+
+# Repository completion based on current input
+complete -c wtd -n "not string match -q '*/*' (commandline -ct); and not string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_owners)" -d "Owner"
+complete -c wtd -n "string match -q '*/*' (commandline -ct); and not string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_repos)" -d "Repository"  
+complete -c wtd -n "string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_branches)" -d "Branch"
+
+# Legacy repo@branch completion for existing worktrees
 if test -d ~/.wtd/workspaces
-    for repo in (find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | sed 's|.*workspaces/||; s|/worktree-.*||' | sort -u)
-        complete -c wtd -a "$repo" -d "Repository"
+    for combo in (find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | sed 's|.*workspaces/||; s|/worktree-|@|' | sort -u)
+        complete -c wtd -a "$combo" -d "Existing worktree"
     end
 end
 """
@@ -1461,8 +1696,12 @@ Notes:
 
     # Default behavior - launch environment
     if not parsed_args.repo_spec:
-        parser.print_help()
-        return 1
+        # Try interactive selection if no repo_spec provided
+        selected_repo = interactive_repo_selection()
+        if not selected_repo:
+            parser.print_help()
+            return 1
+        parsed_args.repo_spec = selected_repo
 
     # Convert to launch command format
     launch_args = argparse.Namespace()
