@@ -4,6 +4,8 @@ This checklist summarizes all requirements and features for building the `wtd` t
 
 ---
 
+set relative .renv folder
+
 ## 1. General Requirements
 - [ ] Implement a Python CLI tool called `wtd` (executable via `pyproject.toml`)
 - [ ] Use `rocker` directly for container management (not `worktree_docker`)
