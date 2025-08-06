@@ -494,7 +494,7 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
         if ext.name == "ssh":
             fragment = fragment.copy()  # Don't modify the original
             ssh_auth_sock = os.environ.get("SSH_AUTH_SOCK")
-            
+
             # Only include SSH agent socket mount if available and valid
             if ssh_auth_sock and os.path.exists(ssh_auth_sock):
                 # SSH agent socket is available, keep original fragment
@@ -503,13 +503,11 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
                 # SSH agent socket not available, filter out SSH_AUTH_SOCK references
                 if "volumes" in fragment:
                     fragment["volumes"] = [
-                        vol for vol in fragment["volumes"] 
-                        if "${SSH_AUTH_SOCK}" not in vol
+                        vol for vol in fragment["volumes"] if "${SSH_AUTH_SOCK}" not in vol
                     ]
                 if "environment" in fragment and fragment["environment"]:
                     fragment["environment"] = {
-                        k: v for k, v in fragment["environment"].items()
-                        if k != "SSH_AUTH_SOCK"
+                        k: v for k, v in fragment["environment"].items() if k != "SSH_AUTH_SOCK"
                     }
 
         # Merge volumes
