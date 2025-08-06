@@ -209,7 +209,6 @@ wtd blooop/test_wtd --no-gui     # Disable X11/GUI support
 wtd blooop/test_wtd --no-gpu     # Disable GPU passthrough
 ```
 
-
 ## Intelligent Autocompletion & Fuzzy Finder
 
 When running `wtd` without arguments, or with partial input, interactive fuzzy finding is enabled using `iterfzf`:
