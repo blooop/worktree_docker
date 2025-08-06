@@ -240,70 +240,95 @@ def get_workspaces_dir() -> Path:
     return get_cache_dir() / "workspaces"
 
 
-def get_available_repo_branch_combinations() -> List[str]:
-    """Get all available repo@branch combinations from workspaces."""
-    combinations = []
+def get_available_users() -> List[str]:
+    """Get list of available users from workspaces directory."""
     workspaces_dir = get_workspaces_dir()
-
     if not workspaces_dir.exists():
-        return combinations
+        return []
+    return [d.name for d in workspaces_dir.iterdir() if d.is_dir()]
 
+
+def get_available_repos(user: str) -> List[str]:
+    """Get list of available repositories for a user."""
+    user_dir = get_workspaces_dir() / user
+    if not user_dir.exists():
+        return []
+    return [d.name for d in user_dir.iterdir() if d.is_dir()]
+
+
+def get_available_branches(repo_spec: RepoSpec) -> List[str]:
+    """Get list of available branches for a repository using local refs (fast, no network calls)."""
+    repo_dir = get_repo_dir(repo_spec)
+    if not repo_dir.exists():
+        return []
+
+    branches = set()
+
+    # Get branches from packed-refs file (common in bare repos)
+    packed_refs_file = repo_dir / "packed-refs"
+    if packed_refs_file.exists():
+        try:
+            with open(packed_refs_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "refs/heads/" in line:
+                        # Format: <hash> refs/heads/branch_name
+                        parts = line.split("refs/heads/", 1)
+                        if len(parts) == 2:
+                            branches.add(parts[1])
+        except Exception:
+            pass
+
+    # Get branches from individual ref files in refs/heads/
+    refs_heads_dir = repo_dir / "refs" / "heads"
+    if refs_heads_dir.exists():
+        try:
+            for ref_file in refs_heads_dir.iterdir():
+                if ref_file.is_file():
+                    branches.add(ref_file.name)
+        except Exception:
+            pass
+
+    # Also get branches from existing worktrees
     try:
-        # Walk through owner/repo directories
-        for owner_dir in workspaces_dir.iterdir():
-            if not owner_dir.is_dir():
-                continue
+        for item in repo_dir.iterdir():
+            if item.is_dir() and item.name.startswith("worktree-"):
+                branch = item.name[9:]  # Remove "worktree-" prefix
+                # Convert hyphens back to slashes for feature branches
+                if "-" in branch and branch not in [
+                    "main",
+                    "master",
+                    "develop",
+                    "staging",
+                    "production",
+                ]:
+                    actual_branch = branch.replace("-", "/")
+                else:
+                    actual_branch = branch
+                branches.add(actual_branch)
+    except Exception:
+        pass
 
-            for repo_dir in owner_dir.iterdir():
-                if not repo_dir.is_dir():
-                    continue
+    return sorted(list(branches))
 
-                repo_combinations = []
 
-                # Get all remote branches from bare repository
-                try:
-                    result = subprocess.run(
-                        ["git", "-C", str(repo_dir), "ls-remote", "--heads", "origin"],
-                        capture_output=True,
-                        text=True,
-                        check=True,
-                    )
+def get_available_repo_branch_combinations() -> List[str]:
+    """Get all available repo@branch combinations for fuzzy finder (fast, local-only)."""
+    combinations = []
 
-                    for line in result.stdout.strip().split("\n"):
-                        if line.strip() and "refs/heads/" in line:
-                            # Extract branch name from refs/heads/branch_name
-                            branch = line.strip().split("refs/heads/", 1)[1]
-                            combination = f"{owner_dir.name}/{repo_dir.name}@{branch}"
-                            repo_combinations.append(combination)
+    for user in get_available_users():
+        for repo in get_available_repos(user):
+            repo_spec = RepoSpec(user, repo, "main")
+            branches = get_available_branches(repo_spec)
 
-                except subprocess.CalledProcessError:
-                    logging.debug(f"Failed to get remote branches for {repo_dir}")
+            if branches:
+                for branch in branches:
+                    combinations.append(f"{user}/{repo}@{branch}")
+            else:
+                # If no branches found, still add with main
+                combinations.append(f"{user}/{repo}@main")
 
-                # Also get existing local worktrees from directory listing
-                for item in repo_dir.iterdir():
-                    if item.is_dir() and item.name.startswith("worktree-"):
-                        branch = item.name[9:]  # Remove "worktree-" prefix
-                        # Assume branch names with hyphens are actually feature branches with slashes
-                        if "-" in branch and branch not in [
-                            "main",
-                            "master",
-                            "develop",
-                            "staging",
-                            "production",
-                        ]:
-                            actual_branch = branch.replace("-", "/")
-                        else:
-                            actual_branch = branch
-                        combination = f"{owner_dir.name}/{repo_dir.name}@{actual_branch}"
-                        repo_combinations.append(combination)
-
-                # Add all combinations for this repository
-                combinations.extend(repo_combinations)
-
-    except Exception as e:
-        logging.debug(f"Error getting repo@branch combinations: {e}")
-
-    return sorted(list(set(combinations)))  # Remove duplicates
+    return sorted(combinations)
 
 
 def interactive_repo_selection() -> Optional[str]:
