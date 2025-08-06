@@ -334,7 +334,9 @@ class TestBuildxOperations:
         # First call (inspect) fails, second call (create) raises error
         mock_run.side_effect = [
             Mock(returncode=1),  # inspect fails
-            subprocess.CalledProcessError(1, ["docker", "buildx", "create", "test_builder"]),  # create fails
+            subprocess.CalledProcessError(
+                1, ["docker", "buildx", "create", "test_builder"]
+            ),  # create fails
         ]
 
         with patch("worktree_docker.worktree_docker.logger") as mock_logger:

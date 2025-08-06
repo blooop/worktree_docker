@@ -280,12 +280,14 @@ def auto_detect_extensions(repo_path: Path) -> List[str]:
             if item.is_file():
                 filename = item.name
                 for pattern, extension in detection_patterns:
-                    if re.match(pattern, filename, re.IGNORECASE) and extension not in detected_extensions:
+                    if (
+                        re.match(pattern, filename, re.IGNORECASE)
+                        and extension not in detected_extensions
+                    ):
                         detected_extensions.append(extension)
                         logging.info(
                             f"Auto-detected extension '{extension}' from file '{filename}'"
                         )
-
 
     except Exception as e:
         logging.warning(f"Failed to auto-detect extensions: {e}")
