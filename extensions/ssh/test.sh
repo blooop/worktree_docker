@@ -11,41 +11,9 @@ if ! command -v ssh &> /dev/null; then
     exit 1
 fi
 
-# Test SSH directory exists with correct permissions
+# Test SSH directory exists (should be mounted from host)
 if [[ ! -d ~/.ssh ]]; then
-    echo "ERROR: ~/.ssh directory does not exist"
-    exit 1
-fi
-
-# Test SSH directory permissions
-SSH_PERMS=$(stat -c %a ~/.ssh)
-if [[ "$SSH_PERMS" != "700" ]]; then
-    echo "ERROR: ~/.ssh has incorrect permissions: $SSH_PERMS (expected 700)"
-    exit 1
-fi
-
-# Test known_hosts exists
-if [[ ! -f ~/.ssh/known_hosts ]]; then
-    echo "ERROR: ~/.ssh/known_hosts does not exist"
-    exit 1
-fi
-
-# Test GitHub is in known_hosts
-if ! grep -q "github.com" ~/.ssh/known_hosts; then
-    echo "ERROR: github.com not found in known_hosts"
-    exit 1
-fi
-
-# Test SSH config exists
-if [[ ! -f ~/.ssh/config ]]; then
-    echo "ERROR: ~/.ssh/config does not exist"
-    exit 1
-fi
-
-# Test SSH config permissions
-CONFIG_PERMS=$(stat -c %a ~/.ssh/config)
-if [[ "$CONFIG_PERMS" != "600" ]]; then
-    echo "ERROR: ~/.ssh/config has incorrect permissions: $CONFIG_PERMS (expected 600)"
+    echo "ERROR: ~/.ssh directory does not exist (should be mounted from host)"
     exit 1
 fi
 
@@ -54,6 +22,13 @@ if [[ -n "$SSH_AUTH_SOCK" ]] && [[ -S "$SSH_AUTH_SOCK" ]]; then
     echo "✓ SSH agent socket available at $SSH_AUTH_SOCK"
 else
     echo "⚠ SSH agent socket not available (this is OK if SSH agent is not running)"
+fi
+
+# Test that we can attempt SSH connections (will use host SSH config and keys)
+if ssh -o BatchMode=yes -o ConnectTimeout=5 -T git@github.com 2>&1 | grep -q "successfully authenticated\|Permission denied"; then
+    echo "✓ SSH connection to GitHub can be attempted (using host SSH setup)"
+else
+    echo "⚠ Could not test SSH connection to GitHub (this is OK if no SSH keys are configured)"
 fi
 
 echo "✓ SSH extension test passed"
