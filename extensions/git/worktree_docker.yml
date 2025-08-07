@@ -1,5 +1,8 @@
 name: git
 description: Git version control system configuration
+dependencies:
+  - base  # git binary is installed in base extension
+  - user  # git configuration is user-specific
 auto_detect:
   directories:
     - "^\\.git$"

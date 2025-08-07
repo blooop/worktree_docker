@@ -1,5 +1,7 @@
 name: x11
 description: X11 GUI support for graphical applications
+dependencies:
+  - base  # x11 needs base system packages
 auto_detect:
   # Auto-detect when GUI environment is available
   host_paths:

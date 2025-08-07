@@ -1,3 +1,2 @@
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    mv /root/.local/bin/uv /usr/local/bin/uv && \
-    mv /root/.local/bin/uvx /usr/local/bin/uvx
+FROM base as uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
