@@ -870,14 +870,28 @@ def generate_bake_file(
     base_image: str,
     platforms: List[str],
     build_dir: Path,
+    *,
     image_name: str = None,
+    build_args: Dict[str, str] = None,
 ) -> str:
     """Generate docker-bake.hcl file for Buildx."""
     # Create targets for each extension layer
     targets = []
 
+    # Initialize build_args if None
+    if build_args is None:
+        build_args = {}
+
     # Convert platforms list to proper HCL array syntax
     platforms_hcl = "[" + ", ".join(f'"{platform}"' for platform in platforms) + "]"
+
+    # Convert build_args to HCL format
+    build_args_hcl = ""
+    if build_args:
+        args_map = []
+        for key, value in build_args.items():
+            args_map.append(f'        {key} = "{value}"')
+        build_args_hcl = f"    args = {{\n{chr(10).join(args_map)}\n    }}"
 
     current_image = base_image
     for ext in extensions:
@@ -885,12 +899,13 @@ def generate_bake_file(
             continue
 
         target_name = f"ext-{ext.name}"
+        target_args = f"\n{build_args_hcl}" if build_args_hcl else ""
         target = f"""
 target "{target_name}" {{
     context = "."
     dockerfile = "Dockerfile.{ext.name}"
     tags = ["wtd/{ext.name}:{ext.hash}"]
-    platforms = {platforms_hcl}
+    platforms = {platforms_hcl}{target_args}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
 }}"""
@@ -910,12 +925,13 @@ target "{target_name}" {{
     final_image_tag = (
         image_name if image_name else f"wtd/final:{'-'.join(ext.hash for ext in extensions)}"
     )
+    final_args = f"\n{build_args_hcl}" if build_args_hcl else ""
     final_target = f"""
 target "final" {{
     context = "."
     dockerfile = "Dockerfile"
     tags = ["{final_image_tag}"]
-    platforms = {platforms_hcl}
+    platforms = {platforms_hcl}{final_args}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
 }}"""
@@ -975,7 +991,9 @@ target "{stage_name}" {{
     # For now, fall back to the original build system until multi-stage is fully implemented
     # The multi-stage system needs more work to properly handle dependencies
     logging.info("Multi-stage build system is under development, using traditional build approach")
-    return generate_bake_file(extensions, base_image, platforms, build_dir)
+    return generate_bake_file(
+        extensions, base_image, platforms, build_dir, image_name=None, build_args=None
+    )
 
 
 def should_rebuild_image(
@@ -1271,9 +1289,24 @@ def launch_environment(config: LaunchConfig) -> int:
         # Get build cache directory to keep worktree clean
         build_dir = get_build_cache_dir(config.repo_spec)
 
+        # Get host UID and GID for user mapping (needed during build)
+        host_uid = os.getuid()
+        host_gid = os.getgid()
+        build_args = {
+            "USER_UID": str(host_uid),
+            "USER_GID": str(host_gid),
+        }
+
         # Generate build files in build cache directory
         generate_dockerfile(loaded_extensions, base_image, build_dir)
-        generate_bake_file(loaded_extensions, base_image, platforms, build_dir, image_name)
+        generate_bake_file(
+            loaded_extensions,
+            base_image,
+            platforms,
+            build_dir,
+            image_name=image_name,
+            build_args=build_args,
+        )
 
         # Build image
         if not build_image_with_bake(build_dir, config.builder_name, nocache=config.nocache):
