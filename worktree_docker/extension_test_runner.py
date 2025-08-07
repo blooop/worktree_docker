@@ -110,20 +110,48 @@ def run_extension_test_generic(
 
         print("=== STEP 3: TEST EXTENSION AVAILABILITY ===")
         # Test that the extension's functionality is available in the environment
-        # This is more reliable than testing specific loading behavior
-        test_result = subprocess.run(
-            [
-                "wtd",
-                test_repo,
-                "bash",
-                "-c",
-                f"echo 'Testing {extension_name} extension functionality' && exit 0",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            check=False,
-        )
+        # First try to run the extension's specific test by reading and executing it
+        extensions_dir = Path(__file__).parent.parent / "extensions"
+        test_script = extensions_dir / extension_name / "test.sh"
+
+        if test_script.exists():
+            print(f"Running extension-specific test based on: {test_script}")
+            # Read the test script content and execute it inline
+            test_script_content = test_script.read_text()
+            test_result = subprocess.run(
+                [
+                    "wtd",
+                    "--rebuild",  # Force rebuild to test the fixed dockerfile
+                    "-e",
+                    extension_name,  # Explicitly request this extension
+                    test_repo,
+                    "bash",
+                    "-c",
+                    test_script_content,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=180,  # Increase timeout for rebuild
+                check=False,
+            )
+        else:
+            print(f"No test.sh found for {extension_name}, running generic test")
+            test_result = subprocess.run(
+                [
+                    "wtd",
+                    "--rebuild",  # Force rebuild for generic tests too
+                    "-e",
+                    extension_name,  # Explicitly request this extension
+                    test_repo,
+                    "bash",
+                    "-c",
+                    f"echo 'Testing {extension_name} extension functionality' && exit 0",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=180,  # Increase timeout for rebuild
+                check=False,
+            )
 
         if test_result.returncode == 0:
             print(f"✓ {extension_name} extension environment is functional")

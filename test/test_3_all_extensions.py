@@ -12,7 +12,7 @@ from worktree_docker.extension_test_runner import run_extension_test_generic
 from worktree_docker.worktree_docker import ExtensionManager, auto_detect_extensions
 
 
-@pytest.mark.parametrize("extension", ["base", "git", "user", "pixi", "uv"])
+@pytest.mark.parametrize("extension", ["base", "git", "user", "pixi", "uv", "claude-code"])
 def test_extension_integration(extension):
     """Test extension integration using the generic test runner."""
     test_success = run_extension_test_generic(extension)
@@ -86,11 +86,29 @@ option = "value"
             # Check that PATH is set correctly for user context
             assert "/home/wtd/.pixi/bin" in pixi_ext.dockerfile_content
 
+    def test_auto_detect_claude_code_extension(self):
+        """Test that claude-code extension is auto-detected from CLAUDE.md file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_path = Path(tmpdir)
+            # Create a CLAUDE.md file
+            claude_md = repo_path / "CLAUDE.md"
+            claude_md.write_text(
+                """# Claude Instructions
+
+This repository uses Claude Code for AI assistance.
+""",
+                encoding="utf-8",
+            )
+
+            ext_manager = ExtensionManager(Path("/tmp"))
+            detected = auto_detect_extensions(repo_path, ext_manager)
+            assert "claude-code" in detected
+
 
 if __name__ == "__main__":
     # Run all extension tests manually if executed as a script
     all_passed = True
-    for ext in ["base", "git", "user", "pixi", "uv"]:
+    for ext in ["base", "git", "user", "pixi", "uv", "claude-code"]:
         print(f"\nRunning test for extension: {ext}")
         result = run_extension_test_generic(ext)
         if not result:
