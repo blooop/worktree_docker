@@ -81,3 +81,6 @@ set relative .renv folder
 ---
 
 **Note:** Check off each item as you implement and test it. This checklist ensures full compliance with the wtd specification and robust, user-friendly development workflows.
+
+
+add claude
