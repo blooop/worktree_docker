@@ -722,6 +722,12 @@ def generate_dockerfile(extensions: List[Extension], base_image: str, build_dir:
     # Final stage inherits from the last extension
     final_stage = extensions[-1].name if extensions else "base"
     lines.append(f"FROM {final_stage} as final")
+    
+    # Check if user extension was loaded, and if so, ensure final stage runs as wtd user
+    user_extension_loaded = any(ext.name == "user" for ext in extensions)
+    if user_extension_loaded:
+        lines.append("USER wtd")
+    
     lines.append("WORKDIR /workspace")
     lines.append('CMD ["bash"]')
 

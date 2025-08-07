@@ -1,5 +1,7 @@
 name: uv
 description: Python package manager and virtual environment tool
+dependencies:
+  - user  # uv needs user context for proper permissions
 auto_detect:
   files:
     - "^pyproject\\.toml$"
