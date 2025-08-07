@@ -80,11 +80,11 @@ option = "value"
 
             assert pixi_ext is not None
             assert pixi_ext.name == "pixi"
-            # Check that the dockerfile includes logic to install as the right user
-            assert "if id wtd" in pixi_ext.dockerfile_content
-            assert "su - wtd -c" in pixi_ext.dockerfile_content
-            # Check that PATH includes both locations
-            assert "/root/.pixi/bin:/home/wtd/.pixi/bin" in pixi_ext.dockerfile_content
+            # Check that the dockerfile properly inherits from user and installs pixi
+            assert "FROM user as pixi" in pixi_ext.dockerfile_content
+            assert "curl -fsSL https://pixi.sh/install.sh | bash" in pixi_ext.dockerfile_content
+            # Check that PATH is set correctly for user context
+            assert "/home/wtd/.pixi/bin" in pixi_ext.dockerfile_content
 
 
 if __name__ == "__main__":

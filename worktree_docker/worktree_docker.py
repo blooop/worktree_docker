@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 
+from .autocomplete import install_shell_completion
+
 try:
     from iterfzf import iterfzf
 except ImportError:
@@ -393,6 +395,7 @@ def get_available_repo_branch_combinations() -> List[str]:
     return sorted(combinations)
 
 
+# todo move
 def interactive_repo_selection() -> Optional[str]:
     """Use fuzzy finder to select repo@branch combination."""
     if iterfzf is None:
@@ -681,17 +684,54 @@ def ensure_buildx_builder(builder_name: str = "wtd_builder") -> bool:
 
 
 def generate_dockerfile(extensions: List[Extension], base_image: str, build_dir: Path) -> str:
-    """Generate Dockerfile combining all extensions."""
-    lines = [f"FROM {base_image} as base"]
+    """Generate Dockerfile with proper multi-stage builds for composable extensions."""
+    lines = []
 
-    # Add each extension's Dockerfile content
+    # Build a mapping of extension names to their loaded objects
+    ext_by_name = {ext.name: ext for ext in extensions}
+    processed_extensions = set()
+
     for ext in extensions:
+        # Determine the FROM stage for this extension based on its dependencies
+        if ext.manifest and ext.manifest.get("dependencies"):
+            # Find the last dependency that's actually in our extension list
+            deps = ext.manifest["dependencies"]
+            from_stage = None
+            for dep in reversed(deps):  # Check from last to first
+                if dep in ext_by_name:
+                    from_stage = dep
+                    break
+            # If no dependency found in our list, use base image
+            if from_stage is None:
+                from_stage = "BASE_IMAGE"
+        else:
+            # No dependencies, inherit from base image
+            from_stage = "BASE_IMAGE"
+
+        # Generate the FROM line
+        if from_stage == "BASE_IMAGE":
+            lines.append(f"FROM {base_image} as {ext.name}")
+        else:
+            lines.append(f"FROM {from_stage} as {ext.name}")
+
+        # Add extension's Dockerfile content
         if ext.dockerfile_content.strip():
-            lines.append(f"\n# Extension: {ext.name}")
+            lines.append(f"# Extension: {ext.name}")
             lines.append(ext.dockerfile_content.strip())
 
-    # Ensure we end up in the right working directory
-    lines.append("\nWORKDIR /workspace")
+        lines.append("")  # Empty line between stages
+        processed_extensions.add(ext.name)
+
+    # Final stage inherits from the last extension
+    final_stage = extensions[-1].name if extensions else "base"
+    lines.append(f"FROM {final_stage} as final")
+
+    # Check if user extension was loaded, and if so, ensure final stage runs as wtd user
+    user_extension_loaded = any(ext.name == "user" for ext in extensions)
+    if user_extension_loaded:
+        lines.append("USER wtd")
+
+    lines.append("WORKDIR /workspace")
     lines.append('CMD ["bash"]')
 
     dockerfile_content = "\n".join(lines)
@@ -726,6 +766,10 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
     worktree_git_dir = config.repo_dir / "worktrees" / f"worktree-{safe_branch}"
 
     # Start with base service
+    # Get host UID and GID for user mapping
+    host_uid = os.getuid()
+    host_gid = os.getgid()
+
     service = {
         "image": config.image_name,
         "container_name": config.repo_spec.compose_project_name,
@@ -739,6 +783,8 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
         "environment": {
             "REPO_NAME": config.repo_spec.repo,
             "BRANCH_NAME": config.repo_spec.branch.replace("/", "-"),
+            "USER_UID": str(host_uid),
+            "USER_GID": str(host_gid),
         },
         "labels": {"wtd.managed": "true"},
         "stdin_open": True,
@@ -792,6 +838,10 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
         if "network_mode" in fragment:
             service["network_mode"] = fragment["network_mode"]
 
+        # Set user if specified
+        if "user" in fragment:
+            service["user"] = fragment["user"]
+
         # Merge build args if specified
         if "build" in fragment:
             if "build" not in service:
@@ -819,14 +869,32 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
 
 
 def generate_bake_file(
-    extensions: List[Extension], base_image: str, platforms: List[str], build_dir: Path
+    extensions: List[Extension],
+    base_image: str,
+    platforms: List[str],
+    build_dir: Path,
+    *,
+    image_name: str = None,
+    build_args: Dict[str, str] = None,
 ) -> str:
     """Generate docker-bake.hcl file for Buildx."""
     # Create targets for each extension layer
     targets = []
 
+    # Initialize build_args if None
+    if build_args is None:
+        build_args = {}
+
     # Convert platforms list to proper HCL array syntax
     platforms_hcl = "[" + ", ".join(f'"{platform}"' for platform in platforms) + "]"
+
+    # Convert build_args to HCL format
+    build_args_hcl = ""
+    if build_args:
+        args_map = []
+        for key, value in build_args.items():
+            args_map.append(f'        {key} = "{value}"')
+        build_args_hcl = f"    args = {{\n{chr(10).join(args_map)}\n    }}"
 
     current_image = base_image
     for ext in extensions:
@@ -834,12 +902,13 @@ def generate_bake_file(
             continue
 
         target_name = f"ext-{ext.name}"
+        target_args = f"\n{build_args_hcl}" if build_args_hcl else ""
         target = f"""
 target "{target_name}" {{
     context = "."
     dockerfile = "Dockerfile.{ext.name}"
     tags = ["wtd/{ext.name}:{ext.hash}"]
-    platforms = {platforms_hcl}
+    platforms = {platforms_hcl}{target_args}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
 }}"""
@@ -856,12 +925,16 @@ target "{target_name}" {{
         current_image = f"wtd/{ext.name}:{ext.hash}"
 
     # Final target combining all extensions
+    final_image_tag = (
+        image_name if image_name else f"wtd/final:{'-'.join(ext.hash for ext in extensions)}"
+    )
+    final_args = f"\n{build_args_hcl}" if build_args_hcl else ""
     final_target = f"""
 target "final" {{
     context = "."
     dockerfile = "Dockerfile"
-    tags = ["wtd/final:{"-".join(ext.hash for ext in extensions)}"]
-    platforms = {platforms_hcl}
+    tags = ["{final_image_tag}"]
+    platforms = {platforms_hcl}{final_args}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
 }}"""
@@ -874,6 +947,56 @@ target "final" {{
     bake_path.write_text(bake_content, encoding="utf-8")
 
     return bake_content
+
+
+def generate_multistage_bake_file(
+    extensions: List[Extension], base_image: str, platforms: List[str], build_dir: Path
+) -> str:
+    """Generate docker-bake.hcl file for multi-stage builds with dependency reuse."""
+    # Ensure build directory exists and copy multi-stage Dockerfile
+    build_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy the multi-stage Dockerfile to build directory
+    extensions_dir = Path(__file__).parent.parent / "extensions"
+    multistage_dockerfile = extensions_dir / "Dockerfile.multi"
+
+    if multistage_dockerfile.exists():
+        import shutil
+
+        shutil.copy2(multistage_dockerfile, build_dir / "Dockerfile.multi")
+
+    targets = []
+    platforms_hcl = "[" + ", ".join(f'"{platform}"' for platform in platforms) + "]"
+
+    # Create targets for each unique extension stage
+    processed_stages = set()
+
+    for ext in extensions:
+        stage_name = ext.name
+        if stage_name in processed_stages:
+            continue
+
+        processed_stages.add(stage_name)
+
+        # Create a target for this extension stage that can be reused
+        target = f"""
+target "{stage_name}" {{
+    context = "."
+    dockerfile = "Dockerfile.multi"
+    target = "{stage_name}"
+    tags = ["wtd/{stage_name}:latest"]
+    platforms = {platforms_hcl}
+    cache-from = ["type=local,src=.buildx-cache/{stage_name}"]
+    cache-to = ["type=local,dest=.buildx-cache/{stage_name},mode=max"]
+}}"""
+        targets.append(target)
+
+    # For now, fall back to the original build system until multi-stage is fully implemented
+    # The multi-stage system needs more work to properly handle dependencies
+    logging.info("Multi-stage build system is under development, using traditional build approach")
+    return generate_bake_file(
+        extensions, base_image, platforms, build_dir, image_name=None, build_args=None
+    )
 
 
 def should_rebuild_image(
@@ -1169,9 +1292,24 @@ def launch_environment(config: LaunchConfig) -> int:
         # Get build cache directory to keep worktree clean
         build_dir = get_build_cache_dir(config.repo_spec)
 
+        # Get host UID and GID for user mapping (needed during build)
+        host_uid = os.getuid()
+        host_gid = os.getgid()
+        build_args = {
+            "USER_UID": str(host_uid),
+            "USER_GID": str(host_gid),
+        }
+
         # Generate build files in build cache directory
         generate_dockerfile(loaded_extensions, base_image, build_dir)
-        generate_bake_file(loaded_extensions, base_image, platforms, build_dir)
+        generate_bake_file(
+            loaded_extensions,
+            base_image,
+            platforms,
+            build_dir,
+            image_name=image_name,
+            build_args=build_args,
+        )
 
         # Build image
         if not build_image_with_bake(build_dir, config.builder_name, nocache=config.nocache):
@@ -1234,343 +1372,8 @@ def cmd_list(args) -> int:  # pylint: disable=unused-argument
 
 def cmd_install(args) -> int:  # pylint: disable=unused-argument
     """Install shell completion scripts."""
-    import os  # pylint: disable=reimported,redefined-outer-name
-
-    # Bash completion script
-    bash_completion = """# wtd bash completion
-_wtd_complete() {
-    local cur="${COMP_WORDS[COMP_CWORD]}"
-    local prev="${COMP_WORDS[COMP_CWORD-1]}"
-    
-    # Don't complete after flags that take arguments
-    case "${prev}" in
-        --extensions|-e|--builder|--platforms|--log-level)
-            return 0
-            ;;
-    esac
-    
-    # If current word starts with -, complete options
-    if [[ "${cur}" == -* ]]; then
-        local opts="--help -h --extensions -e --list --prune --ext-list --doctor --install --rebuild --nocache --no-gui --no-gpu --builder --platforms --log-level"
-        COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
-        return 0
-    fi
-    
-    # Handle repo specifications
-    if [[ "${cur}" == *@* ]]; then
-        # Has @, complete branches
-        local owner_repo="${cur%@*}"
-        local branch_prefix="${cur##*@}"
-        local owner="${owner_repo%/*}"
-        local repo="${owner_repo##*/}"
-        
-        if [[ -d ~/.wtd/workspaces/${owner}/${repo} ]]; then
-            local completions=()
-            
-            # Get remote branches
-            if command -v git >/dev/null 2>&1; then
-                while IFS= read -r branch; do
-                    if [[ -n "${branch}" && "${branch}" == "${branch_prefix}"* ]]; then
-                        completions+=("${owner_repo}@${branch}")
-                    fi
-                done < <(git -C ~/.wtd/workspaces/${owner}/${repo} ls-remote --heads origin 2>/dev/null | sed 's/.*refs\\/heads\\///' | sort -u)
-            fi
-            
-            # Get local worktree branches
-            while IFS= read -r branch; do
-                if [[ -n "${branch}" && "${branch}" == "${branch_prefix}"* ]]; then
-                    completions+=("${owner_repo}@${branch}")
-                fi
-            done < <(find ~/.wtd/workspaces/${owner}/${repo} -name "worktree-*" -type d 2>/dev/null | sed 's|.*worktree-||' | sort -u)
-            
-            COMPREPLY=("${completions[@]}")
-        fi
-    elif [[ "${cur}" == */* ]]; then
-        # Contains slash but no @, complete repo names
-        local owner="${cur%/*}"
-        local repo_prefix="${cur##*/}"
-        
-        if [[ -d ~/.wtd/workspaces/${owner} ]]; then
-            local completions=()
-            while IFS= read -r repo; do
-                if [[ -n "${repo}" && "${repo}" == "${repo_prefix}"* ]]; then
-                    completions+=("${owner}/${repo}")
-                fi
-            done < <(find ~/.wtd/workspaces/${owner} -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
-            
-            COMPREPLY=("${completions[@]}")
-            # Don't add space after repo name so user can type @branch
-            if [[ ${#completions[@]} -gt 0 ]]; then
-                compopt -o nospace
-            fi
-        fi
-    else
-        # No slash yet - could be command or user name
-        local completions=()
-        
-        # Add commands if this looks like a command
-        local has_repo_arg=0
-        for word in "${COMP_WORDS[@]:1}"; do
-            if [[ "${word}" == */* && "${word}" != -* ]]; then
-                has_repo_arg=1
-                break
-            fi
-        done
-        
-        if [[ ${has_repo_arg} -eq 0 ]]; then
-            if [[ "launch" == "${cur}"* ]]; then completions+=("launch"); fi
-            if [[ "list" == "${cur}"* ]]; then completions+=("list"); fi
-            if [[ "prune" == "${cur}"* ]]; then completions+=("prune"); fi
-            if [[ "help" == "${cur}"* ]]; then completions+=("help"); fi
-        fi
-        
-        # Add user names if we have workspaces
-        if [[ -d ~/.wtd/workspaces ]]; then
-            while IFS= read -r user; do
-                if [[ -n "${user}" && "${user}" == "${cur}"* ]]; then
-                    completions+=("${user}/")
-                fi
-            done < <(find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
-        fi
-        
-        # Set compopt to not add trailing space for directory-like completions
-        COMPREPLY=("${completions[@]}")
-        if [[ ${#completions[@]} -eq 1 && "${completions[0]}" == */ ]]; then
-            compopt -o nospace
-        fi
-    fi
-}
-complete -F _wtd_complete wtd
-"""
-
-    # Zsh completion script
-    zsh_completion = """#compdef wtd
-_wtd() {
-    local context state line
-    typeset -A opt_args
-    
-    _arguments \\
-        '1: :->repo_spec' \\
-        '*: :->args'
-        
-    case $state in
-        repo_spec)
-            _wtd_repo_spec
-            ;;
-        args)
-            # Complete remaining arguments as commands
-            _command_names
-            ;;
-    esac
-}
-
-_wtd_repo_spec() {
-    local current=${words[CURRENT]}
-    
-    if [[ $current == *@* ]]; then
-        # Complete branches after @
-        local owner_repo="${current%@*}"
-        local branch_prefix="${current##*@}"
-        local owner="${owner_repo%/*}"
-        local repo="${owner_repo##*/}"
-        
-        if [[ -d ~/.wtd/workspaces/$owner/$repo ]]; then
-            local branches
-            branches=($(git -C ~/.wtd/workspaces/$owner/$repo ls-remote --heads origin 2>/dev/null | sed 's/.*refs\\/heads\\///'))
-            # Add worktree branches
-            branches+=($(find ~/.wtd/workspaces/$owner/$repo -name "worktree-*" -type d 2>/dev/null | sed 's|.*worktree-||'))
-            
-            local completions
-            for branch in $branches; do
-                completions+=("$owner_repo@$branch:branch $branch")
-            done
-            _describe 'branches' completions
-        fi
-    elif [[ $current == */* ]]; then
-        # Complete repo names after owner/
-        local owner="${current%/*}"
-        local repo_prefix="${current##*/}"
-        
-        if [[ -d ~/.wtd/workspaces/$owner ]]; then
-            local repos
-            repos=($(find ~/.wtd/workspaces/$owner -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null))
-            
-            local completions
-            for repo in $repos; do
-                completions+=("$owner/$repo:repository $owner/$repo")
-            done
-            _describe 'repositories' completions
-        fi
-    else
-        # Complete commands and user names
-        local commands=(launch list prune help)
-        local users
-        if [[ -d ~/.wtd/workspaces ]]; then
-            users=($(find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null))
-        fi
-        
-        local completions
-        for cmd in $commands; do
-            completions+=("$cmd:command")
-        done
-        for user in $users; do
-            completions+=("$user/:user $user")
-        done
-        _describe 'commands and users' completions
-    fi
-}
-
-_wtd "$@"
-"""
-
-    # Fish completion script
-    fish_completion = """# wtd fish completion
-complete -c wtd -f
-
-# Commands
-complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "launch" -d "Launch container for repo and branch"
-complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "list" -d "Show active worktrees and containers"  
-complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "prune" -d "Remove unused containers and images"
-complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "help" -d "Show help message"
-
-# Options
-complete -c wtd -l install -d "Install shell auto-completion"
-complete -c wtd -l rebuild -d "Force rebuild of container"
-complete -c wtd -l nocache -d "Disable Buildx cache"
-complete -c wtd -l no-gui -d "Disable X11/GUI support"
-complete -c wtd -l no-gpu -d "Disable GPU passthrough"
-complete -c wtd -l log-level -d "Set log level" -xa "debug info warn error"
-
-# Dynamic completion functions
-function __wtd_complete_owners
-    if test -d ~/.wtd/workspaces
-        find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null
-    end
-end
-
-function __wtd_complete_repos
-    set -l current (commandline -ct)
-    set -l owner (string split -f 1 / $current)
-    if test -d ~/.wtd/workspaces/$owner
-        find ~/.wtd/workspaces/$owner -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | string replace -r "^" "$owner/"
-    end
-end
-
-function __wtd_complete_branches
-    set -l current (commandline -ct)
-    set -l owner_repo (string split -f 1 @ $current)
-    set -l owner (string split -f 1 / $owner_repo)
-    set -l repo (string split -f 2 / $owner_repo)
-    if test -d ~/.wtd/workspaces/$owner/$repo
-        # Get remote branches
-        git -C ~/.wtd/workspaces/$owner/$repo ls-remote --heads origin 2>/dev/null | sed 's/.*refs\\/heads\\///' | string replace -r "^" "$owner_repo@"
-        # Get worktree branches
-        find ~/.wtd/workspaces/$owner/$repo -name "worktree-*" -type d 2>/dev/null | sed 's|.*worktree-||' | string replace -r "^" "$owner_repo@"
-    end
-end
-
-# Repository completion based on current input
-complete -c wtd -n "not string match -q '*/*' (commandline -ct); and not string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_owners)" -d "Owner"
-complete -c wtd -n "string match -q '*/*' (commandline -ct); and not string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_repos)" -d "Repository"  
-complete -c wtd -n "string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_branches)" -d "Branch"
-
-# Legacy repo@branch completion for existing worktrees
-if test -d ~/.wtd/workspaces
-    for combo in (find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | sed 's|.*workspaces/||; s|/worktree-|@|' | sort -u)
-        complete -c wtd -a "$combo" -d "Existing worktree"
-    end
-end
-"""
-
-    # Detect shell and install appropriate completion
-    shell = os.environ.get("SHELL", "").split("/")[-1]
-    home = os.path.expanduser("~")
-
-    success = False
-
-    if shell == "bash":
-        # Install bash completion
-        bash_completion_dir = f"{home}/.bash_completion.d"
-        os.makedirs(bash_completion_dir, exist_ok=True)
-        completion_file = f"{bash_completion_dir}/wtd"
-
-        with open(completion_file, "w", encoding="utf-8") as f:
-            f.write(bash_completion)
-
-        # Check if .bashrc sources .bash_completion.d directory
-        bashrc_path = f"{home}/.bashrc"
-        bashrc_content = ""
-        if os.path.exists(bashrc_path):
-            with open(bashrc_path, "r", encoding="utf-8") as f:
-                bashrc_content = f.read()
-
-        # Add sourcing of .bash_completion.d if not present
-        bash_completion_d_source = """
-# Source bash completion files from ~/.bash_completion.d/
-if [ -d ~/.bash_completion.d ]; then
-    for file in ~/.bash_completion.d/*; do
-        [ -r "$file" ] && . "$file"
-    done
-fi"""
-
-        needs_update = False
-        if ".bash_completion.d" not in bashrc_content:
-            needs_update = True
-        elif "for file in ~/.bash_completion.d" not in bashrc_content:
-            needs_update = True
-
-        if needs_update:
-            with open(bashrc_path, "a", encoding="utf-8") as f:
-                f.write(bash_completion_d_source)
-            print(f"✓ Bash completion installed to {completion_file}")
-            print("✓ Added .bash_completion.d sourcing to ~/.bashrc")
-            print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
-        else:
-            print(f"✓ Bash completion installed to {completion_file}")
-            print("✓ .bashrc already configured to load completion files")
-            print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
-
-        success = True
-
-    elif shell == "zsh":
-        # Install zsh completion
-        zsh_completion_dir = f"{home}/.zsh/completions"
-        os.makedirs(zsh_completion_dir, exist_ok=True)
-        completion_file = f"{zsh_completion_dir}/_wtd"
-
-        with open(completion_file, "w", encoding="utf-8") as f:
-            f.write(zsh_completion)
-
-        print(f"✓ Zsh completion installed to {completion_file}")
-        print("Add 'fpath=(~/.zsh/completions $fpath)' to your ~/.zshrc if not already present")
-        print("Run 'autoload -U compinit && compinit' or restart your terminal")
-        success = True
-
-    elif shell == "fish":
-        # Install fish completion
-        fish_completion_dir = f"{home}/.config/fish/completions"
-        os.makedirs(fish_completion_dir, exist_ok=True)
-        completion_file = f"{fish_completion_dir}/wtd.fish"
-
-        with open(completion_file, "w", encoding="utf-8") as f:
-            f.write(fish_completion)
-
-        print(f"✓ Fish completion installed to {completion_file}")
-        print("Restart your fish shell to enable completion")
-        success = True
-
-    else:
-        print(f"✗ Unknown shell: {shell}")
-        print("Supported shells: bash, zsh, fish")
-        print("You can manually install completion scripts:")
-        print("\nBash completion script:")
-        print(bash_completion)
-        print("\nZsh completion script:")
-        print(zsh_completion)
-        print("\nFish completion script:")
-        print(fish_completion)
-
-    return 0 if success else 1
+    del args  # Unused parameter
+    return install_shell_completion()
 
 
 def cmd_prune(args) -> int:

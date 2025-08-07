@@ -17,8 +17,73 @@ extensions/
 ├── nvidia/                  # GPU acceleration
 ├── uv/                      # Python package manager
 ├── pixi/                    # Conda-compatible package manager
-└── fzf/                     # Fuzzy finder tool
+├── npm/                     # Node.js and npm package manager
+├── react/                   # React development tools (depends on npm)
+├── fzf/                     # Fuzzy finder tool
+└── ssh/                     # SSH client setup
 ```
+
+### Multi-Stage Build System with Dependency Management
+
+wtd now uses Docker BuildKit's multi-stage builds with proper dependency management and stage reuse:
+
+#### Key Features
+
+1. **Extension Dependencies**: Extensions can declare dependencies on other extensions
+2. **Stage Reuse**: Common base stages (like `user`, `npm`) are built once and reused
+3. **Optimized Caching**: Each extension stage is cached independently for faster rebuilds
+4. **Dependency Resolution**: Automatically resolves and builds dependencies in correct order
+
+#### Extension Dependencies
+
+Extensions specify dependencies in their `worktree_docker.yml` file:
+
+```yaml
+name: react
+description: React development environment
+dependencies:
+  - npm  # Depends on npm extension
+  - user # npm depends on user, so transitively included
+auto_detect:
+  files:
+    - "package.json"
+  file_contents:
+    "package.json":
+      - "\"react\""
+```
+
+#### Multi-Stage Dockerfile
+
+All extensions are now built using a shared multi-stage `Dockerfile.multi`:
+
+```dockerfile
+# Each extension becomes a reusable stage
+FROM ubuntu:22.04 as base
+RUN apt-get update && apt-get install -y ...
+
+FROM base as user
+ARG USERNAME=vscode
+ARG USER_UID=1000
+ARG USER_GID=1000
+# User setup that can be reused by all extensions...
+
+FROM user as npm  
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - \
+    && sudo apt-get install -y nodejs
+
+FROM user as fzf
+RUN git clone --depth 1 https://github.com/junegunn/fzf.git ...
+
+FROM npm as react  # Reuses npm stage
+RUN npm install -g create-react-app @vitejs/create-app
+```
+
+#### Benefits
+
+- **Faster Builds**: Extensions that depend on the same base (e.g., `user`) reuse cached layers
+- **Consistency**: All extensions using npm get the same Node.js/npm installation
+- **Maintainability**: Base stages like `user` are maintained in one place
+- **Modularity**: Extensions can be developed independently while reusing infrastructure
 
 ### Extension Structure
 
@@ -69,6 +134,41 @@ environment:
 volumes:
   - "./config:/workspace/config:ro"
 ```
+
+### Example Extension with Dependencies
+
+Here's an example that depends on the npm extension:
+
+**`.wtd/extensions/vue/worktree_docker.yml`:**
+```yaml
+name: vue
+description: Vue.js development environment with Vue CLI
+dependencies:
+  - npm  # Requires npm for Node.js and package management
+auto_detect:
+  files:
+    - "vue.config.js"
+    - "vite.config.js"
+  file_contents:
+    "package.json":
+      - "\"vue\""
+      - "\"@vue/cli\""
+```
+
+**`.wtd/extensions/vue/Dockerfile`:**
+```dockerfile
+# This extension will automatically have access to npm from the dependency
+RUN npm install -g @vue/cli @vue/cli-service-global vite
+
+# Install Vue development tools
+RUN npm install -g @vue/devtools
+```
+
+The dependency system ensures that:
+1. The `npm` extension is built first with Node.js and npm
+2. This `vue` extension reuses the `npm` stage as its base
+3. No duplicate Node.js installations across extensions
+4. Consistent npm and Node.js versions across all dependent extensions
 
 ## Extension Loading
 

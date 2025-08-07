@@ -1,0 +1,13 @@
+name: react
+description: React development environment with create-react-app and common tools
+dependencies:
+  - npm  # Requires npm for Node.js and package management
+auto_detect:
+  files:
+    - "package.json"
+  file_contents:
+    "package.json":
+      - "\"react\""
+      - "\"@types/react\""
+      - "\"next\""
+      - "\"gatsby\""
