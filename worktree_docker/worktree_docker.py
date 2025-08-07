@@ -640,6 +640,12 @@ def setup_worktree(repo_spec: RepoSpec) -> Path:
     else:
         logging.info(f"Worktree already exists: {worktree_dir}")
 
+    # Ensure worktree and .git metadata are owned by UID 1000 (wtd user)
+    try:
+        subprocess.run(["chown", "-R", "1000:1000", str(worktree_dir)], check=False)
+    except Exception as e:
+        logging.warning(f"Failed to chown worktree {worktree_dir}: {e}")
+
     return worktree_dir
 
 
