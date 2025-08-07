@@ -4,6 +4,29 @@
 
 The worktree_docker extension system is designed around **true composability** using Docker multi-stage builds. Each extension builds as its own Docker stage and can inherit from other extensions, creating reusable, cacheable, and modular development environments.
 
+## Important Caveats: Base and User Extensions
+
+While `base` and `user` are implemented as regular extensions, they are foundational and require special attention:
+
+- **`base` extension:**
+  - Must always be present in the dependency graph and have no dependencies.
+  - All other extensions (directly or indirectly) depend on it.
+  - If `base` is missing, the build will fail.
+
+- **`user` extension:**
+  - Should depend only on `base` and is responsible for creating the non-root user (e.g., `wtd`).
+  - Any extension that needs a non-root user context must depend (directly or transitively) on `user`.
+  - Only `user` should create the user; do not duplicate user creation in other extensions.
+  - If an extension expects a user context but does not depend on `user`, you may encounter permission or context errors.
+
+- **Dependency Validation:**
+  - The dependency resolver should ensure that `base` and `user` are included in the correct order.
+  - If an extension needs a user context but does not depend on `user`, raise an error.
+  - Avoid circular dependencies involving `base` or `user`.
+
+**Summary:**
+Treat `base` and `user` as regular extensions, but always ensure they are present and ordered correctly in the dependency graph. This keeps the system composable, cacheable, and robust.
+
 ## Architecture
 
 ### Core Principles
@@ -198,6 +221,73 @@ RUN apt-get update && apt-get install -y \
 ```bash
 mkdir -p .wtd/extensions/my_extension
 cd .wtd/extensions/my_extension
+```
+
+### 1a. Extension That Requires a User
+
+If your extension needs to perform user-level operations (e.g., install tools/configs in the user's home directory), it must depend on `user`:
+
+**worktree_docker.yml**
+```yaml
+name: my_user_extension
+description: Needs user context
+dependencies:
+  - user
+```
+
+**Dockerfile**
+```dockerfile
+# Inherits from user, so already running as wtd
+# User-level operations can be performed directly
+RUN echo "Hello from user context!" > ~/hello.txt
+
+# If you need to install system packages, switch to root, then back to wtd
+USER root
+RUN apt-get update && apt-get install -y cowsay && rm -rf /var/lib/apt/lists/*
+USER wtd
+RUN cowsay "Installed as user!"
+```
+
+### 1b. Extension That Only Requires Base
+
+If your extension only needs to install system packages and does not require a user context, depend only on `base`:
+
+**worktree_docker.yml**
+```yaml
+name: my_base_extension
+description: System-level only
+dependencies:
+  - base
+```
+
+**Dockerfile**
+```dockerfile
+# Inherits from base, runs as root
+RUN apt-get update && apt-get install -y htop && rm -rf /var/lib/apt/lists/*
+# No user-level operations here
+```
+
+### 1c. Extension With Both System and User Elements
+
+If your extension needs to do both system-level (root) and user-level (wtd) operations, depend on `user` (which itself depends on `base`):
+
+**worktree_docker.yml**
+```yaml
+name: my_mixed_extension
+description: Installs system and user tools
+dependencies:
+  - user
+```
+
+**Dockerfile**
+```dockerfile
+# System-level install
+USER root
+RUN apt-get update && apt-get install -y jq && rm -rf /var/lib/apt/lists/*
+
+# User-level config
+USER wtd
+RUN echo 'export PATH="$PATH:/workspace/bin"' >> ~/.bashrc
 ```
 
 ### 2. Extension Manifest
