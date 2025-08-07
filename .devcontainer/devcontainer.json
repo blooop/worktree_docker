@@ -26,7 +26,8 @@
         "ghcr.io/devcontainers/features/docker-in-docker:2": {}
     },
     "mounts": [
-        "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume"
+        "source=${localWorkspaceFolderBasename}-pixi,target=${containerWorkspaceFolder}/.pixi,type=volume",
+        "source=${localWorkspaceFolder}/.claude,target=/home/vscode/.claude,type=bind"
     ],
     "postCreateCommand": "sudo chown vscode .pixi && pixi install"
 }

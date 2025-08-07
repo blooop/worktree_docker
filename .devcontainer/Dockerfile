@@ -6,6 +6,11 @@ RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix
     && chmod +x /usr/local/bin/pixi \
     && pixi info
 
+# Install npm and claude-code
+USER root
+RUN apt-get update && apt-get install -y npm \
+    && npm install -g @anthropic-ai/claude-code
+
 # set some user and workdir settings to work nicely with vscode
 USER vscode
 WORKDIR /home/vscode
