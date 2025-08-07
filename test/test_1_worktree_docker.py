@@ -316,10 +316,13 @@ class TestGitOperations:
 
         # Should call git worktree add
         mock_run.assert_called()
-        call_args = mock_run.call_args[0][0]
-        assert "git" in call_args
-        assert "worktree" in call_args
-        assert "add" in call_args
+        # Check that there was a git worktree add call among the calls made
+        git_calls = [call for call in mock_run.call_args_list if call[0][0] and "git" in call[0][0]]
+        assert len(git_calls) > 0, "Expected at least one git command call"
+        git_call_args = git_calls[0][0][0]  # First git call's arguments
+        assert "git" in git_call_args
+        assert "worktree" in git_call_args
+        assert "add" in git_call_args
 
 
 class TestBuildxOperations:
