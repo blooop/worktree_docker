@@ -681,17 +681,48 @@ def ensure_buildx_builder(builder_name: str = "wtd_builder") -> bool:
 
 
 def generate_dockerfile(extensions: List[Extension], base_image: str, build_dir: Path) -> str:
-    """Generate Dockerfile combining all extensions."""
-    lines = [f"FROM {base_image} as base"]
+    """Generate Dockerfile with proper multi-stage builds for composable extensions."""
+    lines = []
 
-    # Add each extension's Dockerfile content
+    # Build a mapping of extension names to their loaded objects
+    ext_by_name = {ext.name: ext for ext in extensions}
+    processed_extensions = set()
+
     for ext in extensions:
+        # Determine the FROM stage for this extension based on its dependencies
+        if ext.manifest and ext.manifest.get("dependencies"):
+            # Find the last dependency that's actually in our extension list
+            deps = ext.manifest["dependencies"]
+            from_stage = None
+            for dep in reversed(deps):  # Check from last to first
+                if dep in ext_by_name:
+                    from_stage = dep
+                    break
+            # If no dependency found in our list, use base image
+            if from_stage is None:
+                from_stage = "BASE_IMAGE"
+        else:
+            # No dependencies, inherit from base image
+            from_stage = "BASE_IMAGE"
+
+        # Generate the FROM line
+        if from_stage == "BASE_IMAGE":
+            lines.append(f"FROM {base_image} as {ext.name}")
+        else:
+            lines.append(f"FROM {from_stage} as {ext.name}")
+
+        # Add extension's Dockerfile content
         if ext.dockerfile_content.strip():
-            lines.append(f"\n# Extension: {ext.name}")
+            lines.append(f"# Extension: {ext.name}")
             lines.append(ext.dockerfile_content.strip())
 
-    # Ensure we end up in the right working directory
-    lines.append("\nWORKDIR /workspace")
+        lines.append("")  # Empty line between stages
+        processed_extensions.add(ext.name)
+
+    # Final stage inherits from the last extension
+    final_stage = extensions[-1].name if extensions else "base"
+    lines.append(f"FROM {final_stage} as final")
+    lines.append("WORKDIR /workspace")
     lines.append('CMD ["bash"]')
 
     dockerfile_content = "\n".join(lines)

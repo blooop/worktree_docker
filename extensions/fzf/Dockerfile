@@ -1,3 +1,3 @@
-RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/$USERNAME/.fzf && \
-    chown -R $USERNAME:$USERNAME /home/$USERNAME/.fzf && \
-    /home/$USERNAME/.fzf/install --all
+RUN git clone --depth 1 https://github.com/junegunn/fzf.git /home/wtd/.fzf && \
+    chown -R wtd:wtd /home/wtd/.fzf && \
+    /home/wtd/.fzf/install --all
