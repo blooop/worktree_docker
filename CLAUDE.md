@@ -90,4 +90,6 @@ When making any changes, keep this file up to date
 
 After every command always run `pixi run ci` to confirm all checks pass. If ci does not complete, fix the errors, to ensure the code is correct, and run ci until it passes.
 
-Do not apply a 5 minute timeout on ci. It must fully pass
+Give `pixi r ci` a 12 minute timeout as it takes a long time to run. Always fully run ci.  
+
+Once ci passes, commit the changes with a good description and then run `pixi r fix-commit-push`
