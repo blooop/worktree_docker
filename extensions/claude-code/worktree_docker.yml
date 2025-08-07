@@ -1,0 +1,8 @@
+name: claude-code
+description: Anthropic Claude Code CLI tool
+dependencies:
+  - npm  # claude-code requires npm for installation
+auto_detect:
+  files:
+    - ".claude.md"
+    - "CLAUDE.md"
