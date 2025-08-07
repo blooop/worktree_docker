@@ -823,6 +823,10 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
         if "network_mode" in fragment:
             service["network_mode"] = fragment["network_mode"]
 
+        # Set user if specified
+        if "user" in fragment:
+            service["user"] = fragment["user"]
+
         # Merge build args if specified
         if "build" in fragment:
             if "build" not in service:
