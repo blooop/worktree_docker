@@ -393,6 +393,7 @@ def get_available_repo_branch_combinations() -> List[str]:
     return sorted(combinations)
 
 
+# todo move
 def interactive_repo_selection() -> Optional[str]:
     """Use fuzzy finder to select repo@branch combination."""
     if iterfzf is None:
