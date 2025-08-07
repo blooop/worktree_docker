@@ -8,8 +8,8 @@ echo
 
 # Step 1: Test normal operation
 echo "=== STEP 1: Normal wtd operation ==="
-echo "Running: wtd blooop/test_wtd date"
-wtd blooop/test_wtd date
+echo "Running: wtd blooop/test_wtd echo 'initial test'"
+wtd blooop/test_wtd echo "initial test"
 echo "SUCCESS: Initial wtd operation completed"
 echo
 
@@ -22,8 +22,8 @@ echo
 
 # Step 3: Test wtd recreation and operation
 echo "=== STEP 3: Testing wtd recreation ==="
-echo "Running: wtd blooop/test_wtd date (should recreate everything)"
-wtd blooop/test_wtd date
+echo "Running: wtd blooop/test_wtd echo 'recreation test' (should recreate everything)"
+wtd blooop/test_wtd echo "recreation test"
 echo "SUCCESS: wtd recreated and operated correctly"
 echo
 
