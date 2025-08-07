@@ -722,9 +722,55 @@ def generate_dockerfile(extensions: List[Extension], base_image: str, build_dir:
         lines.append("")  # Empty line between stages
         processed_extensions.add(ext.name)
 
-    # Final stage inherits from the last extension
-    final_stage = extensions[-1].name if extensions else "base"
-    lines.append(f"FROM {final_stage} as final")
+    # Create final stage using a dependency-aware approach that ensures all extensions
+    # are in the final image through proper multi-stage inheritance
+    final_stage_base = extensions[-1].name if extensions else "base"
+
+    # Create a unified final stage that combines all extension layers
+    lines.append(f"FROM {final_stage_base} as final")
+
+    # Copy artifacts from extension stages that aren't in the main dependency chain
+    # This ensures all requested functionality is available in the final image
+    main_chain = set()
+    current = final_stage_base
+    while current and current != "base":
+        main_chain.add(current)
+        # Find what this extension depends on by looking at its dependencies
+        ext = ext_by_name.get(current)
+        if ext and ext.manifest and ext.manifest.get("dependencies"):
+            deps = ext.manifest["dependencies"]
+            # Follow the dependency chain backward
+            current = deps[-1] if deps and deps[-1] in ext_by_name else None
+        else:
+            current = None
+
+    # Copy from extensions not in the main chain to ensure they're included
+    npm_extensions = []
+    for ext in extensions:
+        if ext.name not in main_chain and ext.name != final_stage_base:
+            if ext.name in ["npm", "claude-code"]:
+                npm_extensions.append(ext.name)
+            else:
+                # Copy generic extensions
+                lines.append(f"COPY --from={ext.name} /usr/local/bin/ /usr/local/bin/")
+                lines.append(f"COPY --from={ext.name} /usr/local/lib/ /usr/local/lib/")
+
+    # Handle npm-based extensions specially to avoid file conflicts
+    if npm_extensions:
+        # Copy npm/node environment from the most complete npm extension
+        npm_source = "npm" if "npm" in npm_extensions else npm_extensions[0]
+        lines.append("# Install Node.js and npm from npm extension")
+        lines.append("USER root")
+        lines.append(f"COPY --from={npm_source} /usr/bin/node /usr/bin/node")
+        lines.append(f"COPY --from={npm_source} /usr/bin/npm /usr/bin/npm")
+        lines.append(f"COPY --from={npm_source} /usr/bin/npx /usr/bin/npx")
+        lines.append(f"COPY --from={npm_source} /usr/lib/node_modules/ /usr/lib/node_modules/")
+        lines.append(f"COPY --from={npm_source} /usr/local/bin/ /usr/local/bin/")
+        lines.append(f"COPY --from={npm_source} /usr/local/lib/ /usr/local/lib/")
+        # Copy global npm packages from claude-code extension if present
+        if "claude-code" in npm_extensions and npm_source != "claude-code":
+            lines.append(f"COPY --from=claude-code /usr/local/bin/ /usr/local/bin/")
+            lines.append(f"COPY --from=claude-code /usr/local/lib/ /usr/local/lib/")
 
     # Check if user extension was loaded, and if so, ensure final stage runs as wtd user
     user_extension_loaded = any(ext.name == "user" for ext in extensions)
