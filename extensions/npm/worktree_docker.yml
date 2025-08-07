@@ -1,0 +1,11 @@
+name: npm
+description: Node.js and npm package manager
+dependencies:
+  - user  # npm needs user environment
+auto_detect:
+  files:
+    - "package.json"
+    - "package-lock.json"
+    - ".npmrc"
+  directories:
+    - "node_modules"

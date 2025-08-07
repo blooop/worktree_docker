@@ -876,6 +876,54 @@ target "final" {{
     return bake_content
 
 
+def generate_multistage_bake_file(
+    extensions: List[Extension], base_image: str, platforms: List[str], build_dir: Path
+) -> str:
+    """Generate docker-bake.hcl file for multi-stage builds with dependency reuse."""
+    # Ensure build directory exists and copy multi-stage Dockerfile
+    build_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy the multi-stage Dockerfile to build directory
+    extensions_dir = Path(__file__).parent.parent / "extensions"
+    multistage_dockerfile = extensions_dir / "Dockerfile.multi"
+
+    if multistage_dockerfile.exists():
+        import shutil
+
+        shutil.copy2(multistage_dockerfile, build_dir / "Dockerfile.multi")
+
+    targets = []
+    platforms_hcl = "[" + ", ".join(f'"{platform}"' for platform in platforms) + "]"
+
+    # Create targets for each unique extension stage
+    processed_stages = set()
+
+    for ext in extensions:
+        stage_name = ext.name
+        if stage_name in processed_stages:
+            continue
+
+        processed_stages.add(stage_name)
+
+        # Create a target for this extension stage that can be reused
+        target = f"""
+target "{stage_name}" {{
+    context = "."
+    dockerfile = "Dockerfile.multi"
+    target = "{stage_name}"
+    tags = ["wtd/{stage_name}:latest"]
+    platforms = {platforms_hcl}
+    cache-from = ["type=local,src=.buildx-cache/{stage_name}"]
+    cache-to = ["type=local,dest=.buildx-cache/{stage_name},mode=max"]
+}}"""
+        targets.append(target)
+
+    # For now, fall back to the original build system until multi-stage is fully implemented
+    # The multi-stage system needs more work to properly handle dependencies
+    logging.info("Multi-stage build system is under development, using traditional build approach")
+    return generate_bake_file(extensions, base_image, platforms, build_dir)
+
+
 def should_rebuild_image(
     image_name: str,
     extensions: List[Extension],  # pylint: disable=unused-argument
