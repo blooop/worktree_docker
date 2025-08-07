@@ -722,12 +722,12 @@ def generate_dockerfile(extensions: List[Extension], base_image: str, build_dir:
     # Final stage inherits from the last extension
     final_stage = extensions[-1].name if extensions else "base"
     lines.append(f"FROM {final_stage} as final")
-    
+
     # Check if user extension was loaded, and if so, ensure final stage runs as wtd user
     user_extension_loaded = any(ext.name == "user" for ext in extensions)
     if user_extension_loaded:
         lines.append("USER wtd")
-    
+
     lines.append("WORKDIR /workspace")
     lines.append('CMD ["bash"]')
 
@@ -860,7 +860,11 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
 
 
 def generate_bake_file(
-    extensions: List[Extension], base_image: str, platforms: List[str], build_dir: Path
+    extensions: List[Extension],
+    base_image: str,
+    platforms: List[str],
+    build_dir: Path,
+    image_name: str = None,
 ) -> str:
     """Generate docker-bake.hcl file for Buildx."""
     # Create targets for each extension layer
@@ -897,11 +901,14 @@ target "{target_name}" {{
         current_image = f"wtd/{ext.name}:{ext.hash}"
 
     # Final target combining all extensions
+    final_image_tag = (
+        image_name if image_name else f"wtd/final:{'-'.join(ext.hash for ext in extensions)}"
+    )
     final_target = f"""
 target "final" {{
     context = "."
     dockerfile = "Dockerfile"
-    tags = ["wtd/final:{"-".join(ext.hash for ext in extensions)}"]
+    tags = ["{final_image_tag}"]
     platforms = {platforms_hcl}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
@@ -1260,7 +1267,7 @@ def launch_environment(config: LaunchConfig) -> int:
 
         # Generate build files in build cache directory
         generate_dockerfile(loaded_extensions, base_image, build_dir)
-        generate_bake_file(loaded_extensions, base_image, platforms, build_dir)
+        generate_bake_file(loaded_extensions, base_image, platforms, build_dir, image_name)
 
         # Build image
         if not build_image_with_bake(build_dir, config.builder_name, nocache=config.nocache):
