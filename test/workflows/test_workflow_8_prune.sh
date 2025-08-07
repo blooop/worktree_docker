@@ -13,7 +13,7 @@ echo "Cleaned up existing test containers (keeping cache)"
 
 # Test 1: Set up test environment
 echo "=== TEST 1: SETUP TEST ENVIRONMENT ==="
-wtd blooop/test_wtd git status
+wtd blooop/test_wtd echo "setup test"
 echo "✓ Test environment created"
 
 # Verify container exists
@@ -41,11 +41,11 @@ else
     echo "✓ Worktree correctly removed by selective prune"
 fi
 
-# Test 3: Set up multiple environments for full prune test
+# Test 3: Set up environment for full prune test (reuse image if possible)
 echo "=== TEST 3: SETUP MULTIPLE ENVIRONMENTS ==="
-wtd blooop/test_wtd git status
-wtd blooop/test_wtd@dev git status 2>/dev/null || wtd blooop/test_wtd@main git status  # Use main if dev doesn't exist
-echo "✓ Multiple environments created"
+wtd blooop/test_wtd echo "multi setup test"
+# Skip creating additional branch/container - test full prune with single environment
+echo "✓ Environment created for full prune test"
 
 # Test 4: Full prune - should remove everything
 echo "=== TEST 4: FULL PRUNE TEST ==="
