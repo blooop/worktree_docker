@@ -763,6 +763,10 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
     worktree_git_dir = config.repo_dir / "worktrees" / f"worktree-{safe_branch}"
 
     # Start with base service
+    # Get host UID and GID for user mapping
+    host_uid = os.getuid()
+    host_gid = os.getgid()
+
     service = {
         "image": config.image_name,
         "container_name": config.repo_spec.compose_project_name,
@@ -776,6 +780,8 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
         "environment": {
             "REPO_NAME": config.repo_spec.repo,
             "BRANCH_NAME": config.repo_spec.branch.replace("/", "-"),
+            "USER_UID": str(host_uid),
+            "USER_GID": str(host_gid),
         },
         "labels": {"wtd.managed": "true"},
         "stdin_open": True,
