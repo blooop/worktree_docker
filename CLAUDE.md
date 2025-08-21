@@ -70,7 +70,7 @@ This project uses [Pixi](https://pixi.sh) for package and environment management
 
 ### Directory Structure
 
-**User Data**: `~/.wtd/workspaces/owner/repo/worktree-branch`
+**User Data**: `~/.wtd/owner/repo/wt-branch`
 **Extensions**: `extensions/` (built-in) and `.wtd/extensions/` (custom)
 **Test Data**: `test/` with workflow scripts and extension tests
 
