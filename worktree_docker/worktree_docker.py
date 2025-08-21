@@ -1611,8 +1611,14 @@ def cmd_doctor(args) -> int:  # pylint: disable=unused-argument
     return 0 if all_good else 1
 
 
-def main() -> int:
-    """Main entry point."""
+def main(argv: Optional[List[str]] = None) -> int:
+    """Main entry point.
+
+    Accepts an optional argv list for programmatic invocation (used by the
+    lightweight `wt` wrapper which prepends --no-docker). When None, falls
+    back to sys.argv[1:].
+    """
+    arg_list = argv if argv is not None else sys.argv[1:]
     parser = argparse.ArgumentParser(
         prog="wtd",
         usage="wtd [OPTIONS] [-e ext1 ext2 ...] <owner>/<repo>[@<branch>][#<subfolder>] [command...]",
@@ -1720,12 +1726,18 @@ Notes:
         help="Set log verbosity: debug, info, warn, error (default: info)",
     )
 
-    # Handle --install flag specially
-    if "--install" in sys.argv:
+    parser.add_argument(
+        "--no-docker",
+        action="store_true",
+        help="Skip all Docker build/launch logic; only manage git worktree and run command locally",
+    )
+
+    # Handle --install flag specially (must look in provided arg list)
+    if "--install" in arg_list:
         return cmd_install(argparse.Namespace())
 
     # Parse known args first to avoid conflicts with container command flags
-    parsed_args, unknown_args = parser.parse_known_args()
+    parsed_args, unknown_args = parser.parse_known_args(arg_list)
 
     # If we have unknown args and a repo_spec, treat unknown args as part of the command
     if unknown_args and parsed_args.repo_spec:
@@ -1755,7 +1767,7 @@ Notes:
     if parsed_args.doctor:
         return cmd_doctor(parsed_args)
 
-    # Default behavior - launch environment
+    # Default behavior - launch environment (or worktree only if --no-docker)
     if not parsed_args.repo_spec:
         # Try interactive selection if no repo_spec provided
         selected_repo = interactive_repo_selection()
@@ -1763,6 +1775,29 @@ Notes:
             parser.print_help()
             return 1
         parsed_args.repo_spec = selected_repo
+
+    # Worktree-only mode (no Docker) --------------------------------------
+    if parsed_args.no_docker:
+        repo_spec = RepoSpec.parse(parsed_args.repo_spec)
+        # Ensure worktree exists
+        worktree_dir = setup_worktree(repo_spec)
+        # Apply subfolder if present
+        exec_dir = worktree_dir
+        if repo_spec.subfolder:
+            exec_dir = worktree_dir / repo_spec.subfolder
+            exec_dir.mkdir(parents=True, exist_ok=True)
+
+        # Run command locally or open shell
+        if parsed_args.command:
+            cmd = parsed_args.command
+            if cmd and cmd[0] == "--":  # allow wt style delimiter
+                cmd = cmd[1:]
+            logging.info("Running local command in worktree: %s", " ".join(cmd))
+            return subprocess.run(cmd, cwd=exec_dir, check=False).returncode
+        # Interactive shell
+        shell = os.environ.get("SHELL", "bash")
+        logging.info("Opening local shell in %s", exec_dir)
+        return subprocess.run([shell], cwd=exec_dir, check=False).returncode
 
     # Convert to launch command format
     launch_args = argparse.Namespace()
