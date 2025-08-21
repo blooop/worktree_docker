@@ -1729,7 +1729,7 @@ Notes:
     parser.add_argument(
         "--no-docker",
         action="store_true",
-        help="Skip all Docker build/launch logic; only manage git worktree and run command locally",
+        help="Skip all Docker build/launch logic; only manage git worktree and run command locally. Note: Docker-dependent features, such as containerized environments and dependencies, will not be available with --no-docker.",
     )
 
     # Handle --install flag specially (must look in provided arg list)
