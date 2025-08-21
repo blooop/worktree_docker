@@ -57,6 +57,7 @@ include = ["worktree_docker"]
 
 [project.scripts]
 wtd = "worktree_docker.worktree_docker:main"
+wt = "worktree_docker.wt:main"
 
 # Environments
 [tool.pixi.environments]
