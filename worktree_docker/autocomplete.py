@@ -6,7 +6,7 @@ import os
 def install_shell_completion() -> int:
     """Install shell completion scripts for the current shell."""
     # Bash completion script
-    bash_completion = """# wtd bash completion
+    bash_completion = """# wtd & wt bash completion
 _wtd_complete() {
     local cur="${COMP_WORDS[COMP_CWORD]}"
     local prev="${COMP_WORDS[COMP_CWORD-1]}"
@@ -110,10 +110,11 @@ _wtd_complete() {
     fi
 }
 complete -F _wtd_complete wtd
+complete -F _wtd_complete wt
 """
 
     # Zsh completion script
-    zsh_completion = """#compdef wtd
+    zsh_completion = """#compdef wtd wt
 _wtd() {
     local context state line
     typeset -A opt_args
@@ -193,14 +194,19 @@ _wtd "$@"
 """
 
     # Fish completion script
-    fish_completion = """# wtd fish completion
+    fish_completion = """# wtd & wt fish completion
 complete -c wtd -f
+complete -c wt -f
 
 # Commands
 complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "launch" -d "Launch container for repo and branch"
 complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "list" -d "Show active worktrees and containers"  
 complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "prune" -d "Remove unused containers and images"
 complete -c wtd -n "not __fish_seen_subcommand_from launch list prune help" -a "help" -d "Show help message"
+complete -c wt -n "not __fish_seen_subcommand_from launch list prune help" -a "launch" -d "Launch container for repo and branch"
+complete -c wt -n "not __fish_seen_subcommand_from launch list prune help" -a "list" -d "Show active worktrees and containers"  
+complete -c wt -n "not __fish_seen_subcommand_from launch list prune help" -a "prune" -d "Remove unused containers and images"
+complete -c wt -n "not __fish_seen_subcommand_from launch list prune help" -a "help" -d "Show help message"
 
 # Options
 complete -c wtd -l install -d "Install shell auto-completion"
@@ -209,6 +215,12 @@ complete -c wtd -l nocache -d "Disable Buildx cache"
 complete -c wtd -l no-gui -d "Disable X11/GUI support"
 complete -c wtd -l no-gpu -d "Disable GPU passthrough"
 complete -c wtd -l log-level -d "Set log level" -xa "debug info warn error"
+complete -c wt -l install -d "Install shell auto-completion"
+complete -c wt -l rebuild -d "Force rebuild of container"
+complete -c wt -l nocache -d "Disable Buildx cache"
+complete -c wt -l no-gui -d "Disable X11/GUI support"
+complete -c wt -l no-gpu -d "Disable GPU passthrough"
+complete -c wt -l log-level -d "Set log level" -xa "debug info warn error"
 
 # Dynamic completion functions
 function __wtd_complete_owners
@@ -242,11 +254,15 @@ end
 complete -c wtd -n "not string match -q '*/*' (commandline -ct); and not string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_owners)" -d "Owner"
 complete -c wtd -n "string match -q '*/*' (commandline -ct); and not string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_repos)" -d "Repository"  
 complete -c wtd -n "string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_branches)" -d "Branch"
+complete -c wt -n "not string match -q '*/*' (commandline -ct); and not string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_owners)" -d "Owner"
+complete -c wt -n "string match -q '*/*' (commandline -ct); and not string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_repos)" -d "Repository"  
+complete -c wt -n "string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_branches)" -d "Branch"
 
 # Legacy repo@branch completion for existing worktrees
 if test -d ~/.wtd/workspaces
     for combo in (find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | sed 's|.*workspaces/||; s|/worktree-|@|' | sort -u)
-        complete -c wtd -a "$combo" -d "Existing worktree"
+    complete -c wtd -a "$combo" -d "Existing worktree"
+    complete -c wt -a "$combo" -d "Existing worktree"
     end
 end
 """
@@ -320,8 +336,12 @@ fi"""
         fish_completion_dir = f"{home}/.config/fish/completions"
         os.makedirs(fish_completion_dir, exist_ok=True)
         completion_file = f"{fish_completion_dir}/wtd.fish"
+        alias_file = f"{fish_completion_dir}/wt.fish"
 
         with open(completion_file, "w", encoding="utf-8") as f:
+            f.write(fish_completion)
+        # Also create a wt alias file sourcing same content for fish (simpler duplication)
+        with open(alias_file, "w", encoding="utf-8") as f:
             f.write(fish_completion)
 
         print(f"✓ Fish completion installed to {completion_file}")
