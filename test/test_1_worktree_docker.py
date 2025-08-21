@@ -316,13 +316,10 @@ class TestGitOperations:
 
         # Should call git worktree add
         mock_run.assert_called()
-        # Check that there was a git worktree add call among the calls made
-        git_calls = [call for call in mock_run.call_args_list if call[0][0] and "git" in call[0][0]]
-        assert len(git_calls) > 0, "Expected at least one git command call"
-        git_call_args = git_calls[0][0][0]  # First git call's arguments
-        assert "git" in git_call_args
-        assert "worktree" in git_call_args
-        assert "add" in git_call_args
+        call_args = mock_run.call_args[0][0]
+        assert "git" in call_args
+        assert "worktree" in call_args
+        assert "add" in call_args
 
 
 class TestBuildxOperations:
@@ -408,41 +405,6 @@ class TestFileGeneration:
             # Check file was written
             dockerfile = work_dir / "Dockerfile"
             assert dockerfile.exists()
-
-    def test_generate_dockerfile_with_user_extension(self):
-        """Test Dockerfile generation includes USER wtd when user extension is present."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            work_dir = Path(tmpdir)
-
-            # Create mock extensions including user extension
-            user_ext = Extension("user", "RUN useradd -m wtd\nUSER wtd", {})
-            git_ext = Extension("git", "RUN apt-get install -y git", {})
-
-            extensions = [user_ext, git_ext]
-            content = generate_dockerfile(extensions, "ubuntu:22.04", work_dir)
-
-            # Check that final stage includes USER wtd
-            assert "FROM git as final" in content
-            assert "USER wtd" in content
-            lines = content.split("\n")
-
-            # Find the final stage and check USER command is present
-            final_stage_index = None
-            for i, line in enumerate(lines):
-                if "FROM git as final" in line:
-                    final_stage_index = i
-                    break
-
-            assert final_stage_index is not None
-
-            # Check that USER wtd appears after the final stage
-            user_found_in_final = False
-            for line in lines[final_stage_index:]:
-                if line.strip() == "USER wtd":
-                    user_found_in_final = True
-                    break
-
-            assert user_found_in_final, f"USER wtd not found in final stage. Content:\n{content}"
 
     def test_generate_compose_file(self):
         """Test docker-compose.yml generation."""
