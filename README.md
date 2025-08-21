@@ -85,7 +85,7 @@ Environment:
   WTD_CACHE_REGISTRY       Push/pull extension build cache to a registry
 
 Notes:
-  - Worktrees are stored under ~/.wtd/workspaces/<owner>/<repo>/worktree-<branch>
+  - Worktrees are stored under ~/.wtd/<owner>/<repo>/wt-<branch>
   - Extensions can be configured via .wtd.yml in the repo
   - Extension images are hashed and reused across repos/branches automatically
   - Supports Docker socket sharing (DOOD) and Docker-in-Docker (DinD) setups
@@ -98,8 +98,8 @@ Notes:
 ```bash
 wtd blooop/test_wtd@main
 ```
-- Clones as bare repo to `~/wtd/blooop/test_wtd`
-- Creates worktree for `main` at `~/wtd/blooop/test_wtd/worktree-main`
+- Clones as bare repo to `~/.wtd/blooop/test_wtd`
+- Creates worktree for `main` at `~/.wtd/blooop/test_wtd/wt-main`
 - Launches a container in that worktree
 - git commands work immediately on entering (i.e., enter into the correct folder for git to work with worktrees, and bare repo is mounted properly)
 

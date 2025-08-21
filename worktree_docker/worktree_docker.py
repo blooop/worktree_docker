@@ -301,7 +301,10 @@ def get_cache_dir() -> Path:
 
 def get_workspaces_dir() -> Path:
     """Get workspaces directory."""
-    return get_cache_dir() / "workspaces"
+    # New layout (2025-08): repositories now live directly under ~/.wtd/<owner>/<repo>
+    # We keep returning the cache dir for backward compatibility – existing code that
+    # appended 'workspaces' will still function via legacy detection elsewhere.
+    return get_cache_dir()
 
 
 def get_available_users() -> List[str]:
@@ -353,11 +356,14 @@ def get_available_branches(repo_spec: RepoSpec) -> List[str]:
         except Exception:
             pass
 
-    # Also get branches from existing worktrees
+    # Also get branches from existing worktrees (support legacy 'worktree-' and new 'wt-')
     try:
         for item in repo_dir.iterdir():
-            if item.is_dir() and item.name.startswith("worktree-"):
-                branch = item.name[9:]  # Remove "worktree-" prefix
+            if item.is_dir() and (item.name.startswith("worktree-") or item.name.startswith("wt-")):
+                if item.name.startswith("worktree-"):
+                    branch = item.name[len("worktree-") :]
+                else:
+                    branch = item.name[len("wt-") :]
                 # Convert hyphens back to slashes for feature branches
                 if "-" in branch and branch not in [
                     "main",
@@ -440,18 +446,19 @@ def interactive_repo_selection() -> Optional[str]:
 def get_build_cache_dir(repo_spec: RepoSpec) -> Path:
     """Get build cache directory for a specific repo spec."""
     safe_branch = repo_spec.branch.replace("/", "-")
-    return get_cache_dir() / "builds" / repo_spec.owner / repo_spec.repo / safe_branch
+    # Hidden .builds directory in new layout
+    return get_cache_dir() / ".builds" / repo_spec.owner / repo_spec.repo / safe_branch
 
 
 def get_repo_dir(repo_spec: RepoSpec) -> Path:
-    """Get bare repository directory."""
-    return get_workspaces_dir() / repo_spec.owner / repo_spec.repo
+    """Get bare repository directory (single layout)."""
+    return get_cache_dir() / repo_spec.owner / repo_spec.repo
 
 
 def get_worktree_dir(repo_spec: RepoSpec) -> Path:
-    """Get worktree directory for a specific branch."""
+    """Get worktree directory for a specific branch (wt-<branch>)."""
     safe_branch = repo_spec.branch.replace("/", "-")
-    return get_repo_dir(repo_spec) / f"worktree-{safe_branch}"
+    return get_repo_dir(repo_spec) / f"wt-{safe_branch}"
 
 
 def auto_detect_extensions(repo_path: Path, extension_manager: "ExtensionManager") -> List[str]:
@@ -726,7 +733,12 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
     """Generate docker-compose.yml for the environment."""
     # For git worktrees, we need to mount the worktree git metadata directory as well
     safe_branch = config.repo_spec.branch.replace("/", "-")
-    worktree_git_dir = config.repo_dir / "worktrees" / f"worktree-{safe_branch}"
+    # Git's internal worktrees directory still uses entries named after the worktree path.
+    # We keep referencing the legacy naming for the git metadata folder if it exists; otherwise
+    # check for the new naming convention.
+    legacy_wt_git = config.repo_dir / "worktrees" / f"worktree-{safe_branch}"
+    new_wt_git = config.repo_dir / "worktrees" / f"wt-{safe_branch}"
+    worktree_git_dir = legacy_wt_git if legacy_wt_git.exists() else new_wt_git
 
     # Start with base service
     service = {
@@ -737,7 +749,7 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
         "volumes": [
             f"{config.worktree_dir}:/workspace/{config.repo_spec.repo}",
             f"{config.repo_dir}:/workspace/{config.repo_spec.repo}.git",
-            f"{worktree_git_dir}:/workspace/{config.repo_spec.repo}.git/worktrees/worktree-{safe_branch}",
+            f"{worktree_git_dir}:/workspace/{config.repo_spec.repo}.git/worktrees/wt-{safe_branch}",
         ],
         "environment": {
             "REPO_NAME": config.repo_spec.repo,
@@ -1015,7 +1027,7 @@ def run_compose_service(
                 "dev",
                 "bash",
                 "-c",
-                f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/worktree-{safe_branch}' > /workspace/{repo_spec.repo}/.git",
+                f"echo 'gitdir: /workspace/{repo_spec.repo}.git/worktrees/wt-{safe_branch}' > /workspace/{repo_spec.repo}/.git",
             ]
             subprocess.run(fix_git_cmd, cwd=compose_dir, env=env, check=False)
 
@@ -1323,13 +1335,13 @@ def prune_repo_environment(repo_spec: RepoSpec) -> int:
         repo_dir = get_repo_dir(repo_spec)
         if repo_dir.exists():
             safe_branch = repo_spec.branch.replace("/", "-")
-            worktree_name = f"worktree-{safe_branch}"
+            # Remove worktree registration (new naming only)
             subprocess.run(
-                ["git", "-C", str(repo_dir), "worktree", "remove", worktree_name],
+                ["git", "-C", str(repo_dir), "worktree", "remove", f"wt-{safe_branch}"],
                 check=False,
                 capture_output=True,
             )
-
+            return 0
         logging.info(f"Pruned environment for {repo_spec}")
         return 0
     except Exception as e:
@@ -1520,7 +1532,7 @@ Environment:
   WTD_CACHE_REGISTRY       Push/pull extension build cache to a registry
 
 Notes:
-  - Worktrees are stored under ~/.wtd/workspaces/<owner>/<repo>/worktree-<branch>
+    - Worktrees are stored under ~/.wtd/<owner>/<repo>/wt-<branch>
   - Extensions can be configured via .wtd.yml in the repo
   - Extension images are hashed and reused across repos/branches automatically
   - Supports Docker socket sharing (DOOD) and Docker-in-Docker (DinD) setups
