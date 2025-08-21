@@ -278,18 +278,15 @@ end
         bash_completion_dir = f"{home}/.bash_completion.d"
         os.makedirs(bash_completion_dir, exist_ok=True)
         completion_file = f"{bash_completion_dir}/wtd"
-
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(bash_completion)
 
-        # Check if .bashrc sources .bash_completion.d directory
         bashrc_path = f"{home}/.bashrc"
         bashrc_content = ""
         if os.path.exists(bashrc_path):
             with open(bashrc_path, "r", encoding="utf-8") as f:
                 bashrc_content = f.read()
 
-        # Add sourcing of .bash_completion.d if not present
         bash_completion_d_source = """
 # Source bash completion files from ~/.bash_completion.d/
 if [ -d ~/.bash_completion.d ]; then
@@ -298,52 +295,41 @@ if [ -d ~/.bash_completion.d ]; then
     done
 fi"""
 
-        needs_update = False
-        if ".bash_completion.d" not in bashrc_content:
-            needs_update = True
-        elif "for file in ~/.bash_completion.d" not in bashrc_content:
-            needs_update = True
-
+        needs_update = (
+            ".bash_completion.d" not in bashrc_content
+            or "for file in ~/.bash_completion.d" not in bashrc_content
+        )
         if needs_update:
             with open(bashrc_path, "a", encoding="utf-8") as f:
                 f.write(bash_completion_d_source)
             print(f"✓ Bash completion installed to {completion_file}")
             print("✓ Added .bash_completion.d sourcing to ~/.bashrc")
-            print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
         else:
             print(f"✓ Bash completion installed to {completion_file}")
             print("✓ .bashrc already configured to load completion files")
-            print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
-
+        print("Run 'source ~/.bashrc' or restart your terminal to enable completion")
         success = True
 
     elif shell == "zsh":
-        # Install zsh completion
         zsh_completion_dir = f"{home}/.zsh/completions"
         os.makedirs(zsh_completion_dir, exist_ok=True)
         completion_file = f"{zsh_completion_dir}/_wtd"
-
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(zsh_completion)
-
         print(f"✓ Zsh completion installed to {completion_file}")
         print("Add 'fpath=(~/.zsh/completions $fpath)' to your ~/.zshrc if not already present")
         print("Run 'autoload -U compinit && compinit' or restart your terminal")
         success = True
 
     elif shell == "fish":
-        # Install fish completion
         fish_completion_dir = f"{home}/.config/fish/completions"
         os.makedirs(fish_completion_dir, exist_ok=True)
         completion_file = f"{fish_completion_dir}/wtd.fish"
         alias_file = f"{fish_completion_dir}/wt.fish"
-
         with open(completion_file, "w", encoding="utf-8") as f:
             f.write(fish_completion)
-        # Also create a wt alias file sourcing same content for fish (simpler duplication)
         with open(alias_file, "w", encoding="utf-8") as f:
             f.write(fish_completion)
-
         print(f"✓ Fish completion installed to {completion_file}")
         print("Restart your fish shell to enable completion")
         success = True
