@@ -1,3 +1,6 @@
 name: base
 description: Base system packages and utilities
-always_load: true
+auto_detect:
+  files:
+    - "^Dockerfile$"
+    - "^docker-compose\\.ya?ml$"

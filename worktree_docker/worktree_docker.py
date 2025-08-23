@@ -684,54 +684,17 @@ def ensure_buildx_builder(builder_name: str = "wtd_builder") -> bool:
 
 
 def generate_dockerfile(extensions: List[Extension], base_image: str, build_dir: Path) -> str:
-    """Generate Dockerfile with proper multi-stage builds for composable extensions."""
-    lines = []
+    """Generate Dockerfile combining all extensions."""
+    lines = [f"FROM {base_image} as base"]
 
-    # Build a mapping of extension names to their loaded objects
-    ext_by_name = {ext.name: ext for ext in extensions}
-    processed_extensions = set()
-
+    # Add each extension's Dockerfile content
     for ext in extensions:
-        # Determine the FROM stage for this extension based on its dependencies
-        if ext.manifest and ext.manifest.get("dependencies"):
-            # Find the last dependency that's actually in our extension list
-            deps = ext.manifest["dependencies"]
-            from_stage = None
-            for dep in reversed(deps):  # Check from last to first
-                if dep in ext_by_name:
-                    from_stage = dep
-                    break
-            # If no dependency found in our list, use base image
-            if from_stage is None:
-                from_stage = "BASE_IMAGE"
-        else:
-            # No dependencies, inherit from base image
-            from_stage = "BASE_IMAGE"
-
-        # Generate the FROM line
-        if from_stage == "BASE_IMAGE":
-            lines.append(f"FROM {base_image} as {ext.name}")
-        else:
-            lines.append(f"FROM {from_stage} as {ext.name}")
-
-        # Add extension's Dockerfile content
         if ext.dockerfile_content.strip():
-            lines.append(f"# Extension: {ext.name}")
+            lines.append(f"\n# Extension: {ext.name}")
             lines.append(ext.dockerfile_content.strip())
 
-        lines.append("")  # Empty line between stages
-        processed_extensions.add(ext.name)
-
-    # Final stage inherits from the last extension
-    final_stage = extensions[-1].name if extensions else "base"
-    lines.append(f"FROM {final_stage} as final")
-
-    # Check if user extension was loaded, and if so, ensure final stage runs as wtd user
-    user_extension_loaded = any(ext.name == "user" for ext in extensions)
-    if user_extension_loaded:
-        lines.append("USER wtd")
-
-    lines.append("WORKDIR /workspace")
+    # Ensure we end up in the right working directory
+    lines.append("\nWORKDIR /workspace")
     lines.append('CMD ["bash"]')
 
     dockerfile_content = "\n".join(lines)
@@ -766,10 +729,6 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
     worktree_git_dir = config.repo_dir / "worktrees" / f"worktree-{safe_branch}"
 
     # Start with base service
-    # Get host UID and GID for user mapping
-    host_uid = os.getuid()
-    host_gid = os.getgid()
-
     service = {
         "image": config.image_name,
         "container_name": config.repo_spec.compose_project_name,
@@ -783,8 +742,6 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
         "environment": {
             "REPO_NAME": config.repo_spec.repo,
             "BRANCH_NAME": config.repo_spec.branch.replace("/", "-"),
-            "USER_UID": str(host_uid),
-            "USER_GID": str(host_gid),
         },
         "labels": {"wtd.managed": "true"},
         "stdin_open": True,
@@ -838,10 +795,6 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
         if "network_mode" in fragment:
             service["network_mode"] = fragment["network_mode"]
 
-        # Set user if specified
-        if "user" in fragment:
-            service["user"] = fragment["user"]
-
         # Merge build args if specified
         if "build" in fragment:
             if "build" not in service:
@@ -869,32 +822,14 @@ def generate_compose_file(config: ComposeConfig) -> Dict[str, Any]:
 
 
 def generate_bake_file(
-    extensions: List[Extension],
-    base_image: str,
-    platforms: List[str],
-    build_dir: Path,
-    *,
-    image_name: str = None,
-    build_args: Dict[str, str] = None,
+    extensions: List[Extension], base_image: str, platforms: List[str], build_dir: Path
 ) -> str:
     """Generate docker-bake.hcl file for Buildx."""
     # Create targets for each extension layer
     targets = []
 
-    # Initialize build_args if None
-    if build_args is None:
-        build_args = {}
-
     # Convert platforms list to proper HCL array syntax
     platforms_hcl = "[" + ", ".join(f'"{platform}"' for platform in platforms) + "]"
-
-    # Convert build_args to HCL format
-    build_args_hcl = ""
-    if build_args:
-        args_map = []
-        for key, value in build_args.items():
-            args_map.append(f'        {key} = "{value}"')
-        build_args_hcl = f"    args = {{\n{chr(10).join(args_map)}\n    }}"
 
     current_image = base_image
     for ext in extensions:
@@ -902,13 +837,12 @@ def generate_bake_file(
             continue
 
         target_name = f"ext-{ext.name}"
-        target_args = f"\n{build_args_hcl}" if build_args_hcl else ""
         target = f"""
 target "{target_name}" {{
     context = "."
     dockerfile = "Dockerfile.{ext.name}"
     tags = ["wtd/{ext.name}:{ext.hash}"]
-    platforms = {platforms_hcl}{target_args}
+    platforms = {platforms_hcl}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
 }}"""
@@ -925,16 +859,12 @@ target "{target_name}" {{
         current_image = f"wtd/{ext.name}:{ext.hash}"
 
     # Final target combining all extensions
-    final_image_tag = (
-        image_name if image_name else f"wtd/final:{'-'.join(ext.hash for ext in extensions)}"
-    )
-    final_args = f"\n{build_args_hcl}" if build_args_hcl else ""
     final_target = f"""
 target "final" {{
     context = "."
     dockerfile = "Dockerfile"
-    tags = ["{final_image_tag}"]
-    platforms = {platforms_hcl}{final_args}
+    tags = ["wtd/final:{"-".join(ext.hash for ext in extensions)}"]
+    platforms = {platforms_hcl}
     cache-from = ["type=local,src=.buildx-cache"]
     cache-to = ["type=local,dest=.buildx-cache,mode=max"]
 }}"""
@@ -947,56 +877,6 @@ target "final" {{
     bake_path.write_text(bake_content, encoding="utf-8")
 
     return bake_content
-
-
-def generate_multistage_bake_file(
-    extensions: List[Extension], base_image: str, platforms: List[str], build_dir: Path
-) -> str:
-    """Generate docker-bake.hcl file for multi-stage builds with dependency reuse."""
-    # Ensure build directory exists and copy multi-stage Dockerfile
-    build_dir.mkdir(parents=True, exist_ok=True)
-
-    # Copy the multi-stage Dockerfile to build directory
-    extensions_dir = Path(__file__).parent.parent / "extensions"
-    multistage_dockerfile = extensions_dir / "Dockerfile.multi"
-
-    if multistage_dockerfile.exists():
-        import shutil
-
-        shutil.copy2(multistage_dockerfile, build_dir / "Dockerfile.multi")
-
-    targets = []
-    platforms_hcl = "[" + ", ".join(f'"{platform}"' for platform in platforms) + "]"
-
-    # Create targets for each unique extension stage
-    processed_stages = set()
-
-    for ext in extensions:
-        stage_name = ext.name
-        if stage_name in processed_stages:
-            continue
-
-        processed_stages.add(stage_name)
-
-        # Create a target for this extension stage that can be reused
-        target = f"""
-target "{stage_name}" {{
-    context = "."
-    dockerfile = "Dockerfile.multi"
-    target = "{stage_name}"
-    tags = ["wtd/{stage_name}:latest"]
-    platforms = {platforms_hcl}
-    cache-from = ["type=local,src=.buildx-cache/{stage_name}"]
-    cache-to = ["type=local,dest=.buildx-cache/{stage_name},mode=max"]
-}}"""
-        targets.append(target)
-
-    # For now, fall back to the original build system until multi-stage is fully implemented
-    # The multi-stage system needs more work to properly handle dependencies
-    logging.info("Multi-stage build system is under development, using traditional build approach")
-    return generate_bake_file(
-        extensions, base_image, platforms, build_dir, image_name=None, build_args=None
-    )
 
 
 def should_rebuild_image(
@@ -1292,24 +1172,9 @@ def launch_environment(config: LaunchConfig) -> int:
         # Get build cache directory to keep worktree clean
         build_dir = get_build_cache_dir(config.repo_spec)
 
-        # Get host UID and GID for user mapping (needed during build)
-        host_uid = os.getuid()
-        host_gid = os.getgid()
-        build_args = {
-            "USER_UID": str(host_uid),
-            "USER_GID": str(host_gid),
-        }
-
         # Generate build files in build cache directory
         generate_dockerfile(loaded_extensions, base_image, build_dir)
-        generate_bake_file(
-            loaded_extensions,
-            base_image,
-            platforms,
-            build_dir,
-            image_name=image_name,
-            build_args=build_args,
-        )
+        generate_bake_file(loaded_extensions, base_image, platforms, build_dir)
 
         # Build image
         if not build_image_with_bake(build_dir, config.builder_name, nocache=config.nocache):

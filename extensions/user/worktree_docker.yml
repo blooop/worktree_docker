@@ -1,6 +1,4 @@
 name: user
 description: User account and permissions setup
-dependencies:
-  - base  # user needs base system packages like sudo
 auto_detect:
   # Always included as required extension - no patterns needed

@@ -2,7 +2,6 @@ name: fzf
 description: Command-line fuzzy finder
 dependencies:
   - user  # fzf installs to user home directory, so needs user to be created first
-  - git   # fzf installation requires git to clone the repository
 auto_detect:
   # Auto-detect in most environments - fzf is useful everywhere
   host_paths:
