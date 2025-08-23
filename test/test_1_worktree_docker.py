@@ -245,21 +245,19 @@ class TestPathHelpers:
     def test_get_workspaces_dir(self):
         """Test workspaces directory."""
         with patch("worktree_docker.worktree_docker.get_cache_dir", return_value=Path("/cache")):
-            assert get_workspaces_dir() == Path("/cache/workspaces")
+            assert get_workspaces_dir() == Path("/cache")
 
     def test_get_repo_dir(self):
         """Test repository directory path."""
         spec = RepoSpec("owner", "repo", "main")
-        with patch(
-            "worktree_docker.worktree_docker.get_workspaces_dir", return_value=Path("/workspaces")
-        ):
-            assert get_repo_dir(spec) == Path("/workspaces/owner/repo")
+        with patch("worktree_docker.worktree_docker.get_cache_dir", return_value=Path("/cache")):
+            assert get_repo_dir(spec) == Path("/cache/owner/repo")
 
     def test_get_worktree_dir(self):
         """Test worktree directory path."""
         spec = RepoSpec("owner", "repo", "feature/new")
         with patch("worktree_docker.worktree_docker.get_repo_dir", return_value=Path("/repo")):
-            assert get_worktree_dir(spec) == Path("/repo/worktree-feature-new")
+            assert get_worktree_dir(spec) == Path("/repo/wt-feature-new")
 
 
 class TestGitOperations:

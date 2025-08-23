@@ -85,7 +85,7 @@ else
 fi
 
 # Verify worktree is gone
-if [ -d .wtd/workspaces/blooop/test_wtd/worktree-new_branch ]; then
+if [ -d .wtd/blooop/test_wtd/wt-new_branch ]; then
     echo "✗ Worktree should have been removed by selective prune"
     exit 1
 else

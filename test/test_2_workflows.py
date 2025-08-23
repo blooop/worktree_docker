@@ -251,3 +251,38 @@ def test_workflow_11_install_completion():
     assert "✓ Handles unsupported shell gracefully" in output, (
         "Unsupported shell handling not confirmed"
     )
+
+
+def test_workflow_13_wt_command():
+    output = run_workflow_script("test_workflow_13_wt_command.sh", allowed_returncodes=(0,))
+    assert "=== TEST: WT COMMAND FUNCTIONALITY ===" in output, "Test start not found"
+    assert "=== WT COMMAND FUNCTIONALITY TEST PASSED ===" in output, "Test completion not found"
+    assert "✓ wt command successfully runs git status without Docker" in output, (
+        "Basic wt functionality not confirmed"
+    )
+    assert "✓ Worktree directory created with correct structure" in output, (
+        "Worktree creation not confirmed"
+    )
+    assert "✓ No Docker container created as expected" in output, (
+        "Docker container avoidance not confirmed"
+    )
+    assert "✓ git log command works" in output, "Git log functionality not confirmed"
+    assert "✓ git branch command works" in output, "Git branch functionality not confirmed"
+    assert "✓ non-git commands work through wt" in output, "Non-git command execution not confirmed"
+    assert "✓ Successfully switched to test branch using wt" in output, (
+        "Branch switching not confirmed"
+    )
+    assert "✓ Subfolder created and accessible" in output, "Subfolder functionality not confirmed"
+    assert "✓ Direct git operations work in worktree" in output, (
+        "Direct git operations not confirmed"
+    )
+    assert "✓ Git commits work correctly" in output, "Git commit functionality not confirmed"
+    assert "✓ wt help shows underlying --no-docker behavior" in output, (
+        "Help functionality not confirmed"
+    )
+    assert "✓ wt command produces identical output to wtd --no-docker" in output, (
+        "Consistency with wtd --no-docker not confirmed"
+    )
+    assert "✓ wt properly handles non-existent repositories" in output, (
+        "Error handling not confirmed"
+    )
