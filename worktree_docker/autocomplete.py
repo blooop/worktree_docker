@@ -260,7 +260,7 @@ complete -c wt -n "string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_
 
 # Legacy repo@branch completion for existing worktrees
 if test -d ~/.wtd
-    for combo in (find ~/.wtd -maxdepth 3 -name "wt-*" -type d 2>/dev/null | sed 's|.*\.wtd/||; s|/wt-|@|' | sort -u)
+    for combo in (find ~/.wtd -maxdepth 3 -name "wt-*" -type d 2>/dev/null | sed 's|.*\\.wtd/||; s|/wt-|@|' | sort -u)
         complete -c wtd -a "$combo" -d "Existing worktree"
         complete -c wt -a "$combo" -d "Existing worktree"
     end
