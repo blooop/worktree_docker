@@ -3,8 +3,8 @@
 
 # Environment variables
 environment:
-  # Ensure Claude Code is in PATH
-  PATH: "/home/wtd/.local/bin:${PATH}"
+  # Ensure Claude Code is in PATH (both user and root installations)
+  PATH: "/home/wtd/.local/bin:/root/.local/bin:${PATH}"
 
 # Additional volumes to mount
 volumes:
