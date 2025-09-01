@@ -27,7 +27,7 @@ jobs:
           git config --global user.name "CI Runner"
           git config --global user.email "ci@example.com"
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Setup SSH Agent
         run: |
           # Start SSH agent and set up SSH_AUTH_SOCK
