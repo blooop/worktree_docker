@@ -9,7 +9,4 @@ environment:
 # Additional volumes to mount
 volumes:
   # Mount Claude Code configuration directory
-  - "${HOME}/.config/claude:/home/wtd/.config/claude"
-  
-  # Mount Claude Code cache directory
-  - "${HOME}/.cache/claude:/home/wtd/.cache/claude"
+  - "${HOME}/.claude:/home/wtd/.claude"

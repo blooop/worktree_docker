@@ -1,0 +1,8 @@
+name: claude
+description: Claude Code CLI - Interactive development environment with AI assistance
+dependencies:
+  - base  # requires curl and basic tools for installation
+  - user  # mounts user config directories
+auto_detect:
+  host_paths:
+    - "${HOME}/.claude"
