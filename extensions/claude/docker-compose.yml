@@ -1,0 +1,12 @@
+# Claude Code extension docker-compose fragment
+# This file defines additional Docker Compose configuration for Claude Code
+
+# Environment variables
+environment:
+  # Ensure Claude Code is in PATH (both user and root installations)
+  PATH: "/home/wtd/.local/bin:/root/.local/bin:${PATH}"
+
+# Additional volumes to mount
+volumes:
+  # Mount Claude Code configuration directory
+  - "${HOME}/.claude:/home/wtd/.claude"
