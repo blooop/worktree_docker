@@ -33,7 +33,7 @@ _wtd_complete() {
         local owner="${owner_repo%/*}"
         local repo="${owner_repo##*/}"
         
-        if [[ -d ~/.wtd/workspaces/${owner}/${repo} ]]; then
+    if [[ -d ~/.wtd/${owner}/${repo} ]]; then
             local completions=()
             
             # Get remote branches
@@ -42,7 +42,7 @@ _wtd_complete() {
                     if [[ -n "${branch}" && "${branch}" == "${branch_prefix}"* ]]; then
                         completions+=("${owner_repo}@${branch}")
                     fi
-                done < <(git -C ~/.wtd/workspaces/${owner}/${repo} ls-remote --heads origin 2>/dev/null | sed 's/.*refs\\/heads\\///' | sort -u)
+                done < <(git -C ~/.wtd/${owner}/${repo} ls-remote --heads origin 2>/dev/null | sed 's/.*refs\\/heads\\///' | sort -u)
             fi
             
             # Get local worktree branches
@@ -50,7 +50,7 @@ _wtd_complete() {
                 if [[ -n "${branch}" && "${branch}" == "${branch_prefix}"* ]]; then
                     completions+=("${owner_repo}@${branch}")
                 fi
-            done < <(find ~/.wtd/workspaces/${owner}/${repo} -name "worktree-*" -type d 2>/dev/null | sed 's|.*worktree-||' | sort -u)
+            done < <(find ~/.wtd/${owner}/${repo} -maxdepth 1 -name "wt-*" -type d 2>/dev/null | sed 's|.*wt-||' | sort -u)
             
             COMPREPLY=("${completions[@]}")
         fi
@@ -59,13 +59,13 @@ _wtd_complete() {
         local owner="${cur%/*}"
         local repo_prefix="${cur##*/}"
         
-        if [[ -d ~/.wtd/workspaces/${owner} ]]; then
+    if [[ -d ~/.wtd/${owner} ]]; then
             local completions=()
             while IFS= read -r repo; do
                 if [[ -n "${repo}" && "${repo}" == "${repo_prefix}"* ]]; then
                     completions+=("${owner}/${repo}")
                 fi
-            done < <(find ~/.wtd/workspaces/${owner} -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
+            done < <(find ~/.wtd/${owner} -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
             
             COMPREPLY=("${completions[@]}")
             # Don't add space after repo name so user can type @branch
@@ -94,12 +94,12 @@ _wtd_complete() {
         fi
         
         # Add user names if we have workspaces
-        if [[ -d ~/.wtd/workspaces ]]; then
+    if [[ -d ~/.wtd ]]; then
             while IFS= read -r user; do
                 if [[ -n "${user}" && "${user}" == "${cur}"* ]]; then
                     completions+=("${user}/")
                 fi
-            done < <(find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
+            done < <(find ~/.wtd -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | sort -u)
         fi
         
         # Set compopt to not add trailing space for directory-like completions
@@ -144,11 +144,11 @@ _wtd_repo_spec() {
         local owner="${owner_repo%/*}"
         local repo="${owner_repo##*/}"
         
-        if [[ -d ~/.wtd/workspaces/$owner/$repo ]]; then
+    if [[ -d ~/.wtd/$owner/$repo ]]; then
             local branches
-            branches=($(git -C ~/.wtd/workspaces/$owner/$repo ls-remote --heads origin 2>/dev/null | sed 's/.*refs\\/heads\\///'))
-            # Add worktree branches
-            branches+=($(find ~/.wtd/workspaces/$owner/$repo -name "worktree-*" -type d 2>/dev/null | sed 's|.*worktree-||'))
+            branches=($(git -C ~/.wtd/$owner/$repo ls-remote --heads origin 2>/dev/null | sed 's/.*refs\\/heads\\///'))
+            # Add worktree branches (wt- prefix)
+            branches+=($(find ~/.wtd/$owner/$repo -maxdepth 1 -name "wt-*" -type d 2>/dev/null | sed 's|.*wt-||'))
             
             local completions
             for branch in $branches; do
@@ -161,9 +161,9 @@ _wtd_repo_spec() {
         local owner="${current%/*}"
         local repo_prefix="${current##*/}"
         
-        if [[ -d ~/.wtd/workspaces/$owner ]]; then
+        if [[ -d ~/.wtd/$owner ]]; then
             local repos
-            repos=($(find ~/.wtd/workspaces/$owner -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null))
+            repos=($(find ~/.wtd/$owner -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null))
             
             local completions
             for repo in $repos; do
@@ -175,8 +175,8 @@ _wtd_repo_spec() {
         # Complete commands and user names
         local commands=(launch list prune help)
         local users
-        if [[ -d ~/.wtd/workspaces ]]; then
-            users=($(find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null))
+        if [[ -d ~/.wtd ]]; then
+            users=($(find ~/.wtd -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null))
         fi
         
         local completions
@@ -224,16 +224,16 @@ complete -c wt -l log-level -d "Set log level" -xa "debug info warn error"
 
 # Dynamic completion functions
 function __wtd_complete_owners
-    if test -d ~/.wtd/workspaces
-        find ~/.wtd/workspaces -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null
+    if test -d ~/.wtd
+        find ~/.wtd -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null
     end
 end
 
 function __wtd_complete_repos
     set -l current (commandline -ct)
     set -l owner (string split -f 1 / $current)
-    if test -d ~/.wtd/workspaces/$owner
-        find ~/.wtd/workspaces/$owner -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | string replace -r "^" "$owner/"
+    if test -d ~/.wtd/$owner
+        find ~/.wtd/$owner -maxdepth 1 -mindepth 1 -type d -exec basename {} \\; 2>/dev/null | string replace -r "^" "$owner/"
     end
 end
 
@@ -242,11 +242,11 @@ function __wtd_complete_branches
     set -l owner_repo (string split -f 1 @ $current)
     set -l owner (string split -f 1 / $owner_repo)
     set -l repo (string split -f 2 / $owner_repo)
-    if test -d ~/.wtd/workspaces/$owner/$repo
+    if test -d ~/.wtd/$owner/$repo
         # Get remote branches
-        git -C ~/.wtd/workspaces/$owner/$repo ls-remote --heads origin 2>/dev/null | sed 's/.*refs\\/heads\\///' | string replace -r "^" "$owner_repo@"
-        # Get worktree branches
-        find ~/.wtd/workspaces/$owner/$repo -name "worktree-*" -type d 2>/dev/null | sed 's|.*worktree-||' | string replace -r "^" "$owner_repo@"
+        git -C ~/.wtd/$owner/$repo ls-remote --heads origin 2>/dev/null | sed 's/.*refs\\/heads\\///' | string replace -r "^" "$owner_repo@"
+        # Get worktree branches (wt-)
+        find ~/.wtd/$owner/$repo -maxdepth 1 -name "wt-*" -type d 2>/dev/null | sed 's|.*wt-||' | string replace -r "^" "$owner_repo@"
     end
 end
 
@@ -259,10 +259,10 @@ complete -c wt -n "string match -q '*/*' (commandline -ct); and not string match
 complete -c wt -n "string match -q '*@*' (commandline -ct)" -a "(__wtd_complete_branches)" -d "Branch"
 
 # Legacy repo@branch completion for existing worktrees
-if test -d ~/.wtd/workspaces
-    for combo in (find ~/.wtd/workspaces -name "worktree-*" -type d 2>/dev/null | sed 's|.*workspaces/||; s|/worktree-|@|' | sort -u)
-    complete -c wtd -a "$combo" -d "Existing worktree"
-    complete -c wt -a "$combo" -d "Existing worktree"
+if test -d ~/.wtd
+    for combo in (find ~/.wtd -maxdepth 3 -name "wt-*" -type d 2>/dev/null | sed 's|.*\\.wtd/||; s|/wt-|@|' | sort -u)
+        complete -c wtd -a "$combo" -d "Existing worktree"
+        complete -c wt -a "$combo" -d "Existing worktree"
     end
 end
 """
