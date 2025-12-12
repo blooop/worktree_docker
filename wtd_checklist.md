@@ -16,7 +16,7 @@ set relative .renv folder
 ## 2. Core Features
 - [ ] Accept input: `wtd [owner/repo[@branch][#subfolder]] [command]`
 - [ ] Clone repo as bare to `~/wtd/{owner}/{repo}`
-- [ ] Create worktree for branch at `~/wtd/{owner}/{repo}/worktree-{branch}`
+- [ ] Create worktree for branch at `~/.wtd/{owner}/{repo}/wt-{branch}`
 - [ ] Launch rocker container in the worktree
 - [ ] Automatically name containers/images as `{repo}-{branch}`
 - [ ] If image not built, build it; if not running, start and attach; if running, attach
@@ -45,7 +45,7 @@ set relative .renv folder
 - [ ] Interactive selection UI for repo@branch combinations
 
 ## 6. Directory Structure
-- [ ] Organize repos and worktrees under `~/wtd/{owner}/{repo}/worktree-{branch}`
+- [ ] Organize repos and worktrees under `~/.wtd/{owner}/{repo}/wt-{branch}`
 - [ ] Support multiple worktrees and containers in parallel
 - [ ] Convert branch names with `/` to safe directory names
 
