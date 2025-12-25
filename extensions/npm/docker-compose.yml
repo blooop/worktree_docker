@@ -1,0 +1,10 @@
+# Environment variables for npm
+environment:
+  NPM_CONFIG_PREFIX: "/home/wtd/.npm-global"
+  
+# Additional volumes to persist npm cache and global modules
+volumes:
+  # Persist npm cache
+  - "${HOME}/.npm:/home/wtd/.npm"
+  # Persist global npm modules
+  - "${HOME}/.npm-global:/home/wtd/.npm-global"
