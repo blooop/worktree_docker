@@ -18,7 +18,7 @@ worktree_docker = { path = ".", editable = true }
 Source = "https://github.com/blooop/worktree_docker"
 Home = "https://github.com/blooop/worktree_docker"
 
-[tool.pixi.project]
+[tool.pixi.workspace]
 channels = ["conda-forge"]
 platforms = ["linux-64"]
 
